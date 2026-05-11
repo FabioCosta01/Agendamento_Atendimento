@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SOLICITANTE
+  EXTENSIONISTA
+  ADMINISTRADOR
+
+  @@map("perfil_usuario")
+}
+
+enum AppointmentStatus {
+  SOLICITADO
+  APROVADO
+  REAGENDADO
+  CANCELADO
+  CONCLUIDO
+
+  @@map("status_agendamento")
+}
+
+enum ActionType {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  STATUS_CHANGE
+
+  @@map("tipo_acao")
+}
+
+model User {
+  id               String             @id @default(cuid())
+  name             String             @map("nome")
+  email            String             @unique(map: "usuario_email_key")
+  document         String             @unique(map: "usuario_documento_key") @map("documento")
+  passwordHash     String             @map("senha_hash")
+  phone            String?            @map("telefone")
+  role             UserRole           @map("perfil")
+  isActive         Boolean            @default(true) @map("ativo")
+  createdAt        DateTime           @default(now()) @map("criado_em")
+  updatedAt        DateTime           @updatedAt @map("atualizado_em")
+  attendanceMunicipalities ExtensionistMunicipality[]
+  properties       Property[]         @relation("PropertyOwner")
+  availabilities   Availability[]     @relation("AvailabilityOwner")
+  requestedBy      Appointment[]      @relation("AppointmentRequester")
+  assignedTo       Appointment[]      @relation("AppointmentExtensionist")
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+
+  @@map("usuario")
+}
+
+model ServiceMunicipality {
+  id               String             @id @default(cuid())
+  name             String             @map("nome")
+  state            String             @default("MT") @map("uf")
+  active           Boolean            @default(true) @map("ativo")
+  createdAt        DateTime           @default(now()) @map("criado_em")
+  updatedAt        DateTime           @updatedAt @map("atualizado_em")
+  extensionists    ExtensionistMunicipality[]
+  availabilities   Availability[]
+
+  @@unique([name, state], map: "municipio_atendimento_nome_uf_key")
+  @@index([active], map: "municipio_atendimento_ativo_idx")
+  @@map("municipio_atendimento")
+}
+
+model ExtensionistMunicipality {
+  id             String              @id @default(cuid())
+  extensionistId String              @map("extensionista_id")
+  municipalityId String              @map("municipio_id")
+  createdAt      DateTime            @default(now()) @map("criado_em")
+  extensionist   User                @relation(fields: [extensionistId], references: [id])
+  municipality   ServiceMunicipality @relation(fields: [municipalityId], references: [id])
+
+  @@unique([extensionistId, municipalityId], map: "extensionista_municipio_unique")
+  @@index([municipalityId], map: "extensionista_municipio_municipio_id_idx")
+  @@map("extensionista_municipio")
+}
+
+model Service {
+  id               String             @id @default(cuid())
+  name             String             @map("nome")
+  classification   String             @default("Outros atendimentos") @map("classificacao")
+  description      String?            @map("descricao")
+  durationMinutes  Int                @map("duracao_minutos")
+  active           Boolean            @default(true) @map("ativo")
+  createdAt        DateTime           @default(now()) @map("criado_em")
+  updatedAt        DateTime           @updatedAt @map("atualizado_em")
+  appointments     Appointment[]
+
+  @@index([active], map: "servico_ativo_idx")
+  @@index([classification], map: "servico_classificacao_idx")
+  @@index([name], map: "servico_nome_idx")
+  @@map("servico")
+}
+
+model Property {
+  id                     String         @id @default(cuid())
+  ownerId                String         @map("proprietario_id")
+  ownerName              String         @map("nome_proprietario")
+  ownerDocument          String         @map("documento_proprietario")
+  ruralRegistry          String?        @map("registro_rural")
+  funruralCode           String?        @map("codigo_funrural")
+  displayName            String         @map("nome_exibicao")
+  city                   String         @map("municipio")
+  state                  String         @map("uf")
+  address                String?        @map("endereco")
+  hasHabiteSe            Boolean        @default(false) @map("possui_habite_se")
+  createdAt              DateTime       @default(now()) @map("criado_em")
+  updatedAt              DateTime       @updatedAt @map("atualizado_em")
+  owner                  User           @relation("PropertyOwner", fields: [ownerId], references: [id])
+  appointments           Appointment[]
+
+  @@index([ownerId], map: "propriedade_proprietario_id_idx")
+  @@index([city, state], map: "propriedade_municipio_uf_idx")
+  @@map("propriedade")
+}
+
+model Availability {
+  id                    String        @id @default(cuid())
+  extensionistId        String        @map("extensionista_id")
+  municipalityId        String        @map("municipio_id")
+  startDateTime         DateTime      @map("inicio")
+  endDateTime           DateTime      @map("fim")
+  capacity              Int           @default(1) @map("capacidade")
+  notes                 String?       @map("observacoes")
+  createdAt             DateTime      @default(now()) @map("criado_em")
+  updatedAt             DateTime      @updatedAt @map("atualizado_em")
+  extensionist          User          @relation("AvailabilityOwner", fields: [extensionistId], references: [id])
+  municipality          ServiceMunicipality @relation(fields: [municipalityId], references: [id])
+  appointments          Appointment[]
+
+  @@unique([extensionistId, startDateTime], map: "disponibilidade_extensionista_inicio_key")
+  @@index([extensionistId, startDateTime], map: "disponibilidade_extensionista_inicio_idx")
+  @@index([municipalityId, startDateTime], map: "disponibilidade_municipio_inicio_idx")
+  @@index([startDateTime], map: "disponibilidade_inicio_idx")
+  @@map("disponibilidade_agenda")
+}
+
+model Appointment {
+  id                    String              @id @default(cuid())
+  requesterId           String              @map("solicitante_id")
+  extensionistId        String?             @map("extensionista_id")
+  serviceId             String              @map("servico_id")
+  propertyId            String              @map("propriedade_id")
+  availabilityId        String?             @map("disponibilidade_id")
+  protocolCode          String              @unique(map: "agendamento_codigo_protocolo_key") @map("codigo_protocolo")
+  preferredDate         DateTime            @map("data_preferida")
+  scheduledStart        DateTime?           @map("inicio_agendado")
+  scheduledEnd          DateTime?           @map("fim_agendado")
+  status                AppointmentStatus   @default(SOLICITADO)
+  notes                 String?             @map("observacoes")
+  justification         String?             @map("justificativa")
+  createdAt             DateTime            @default(now()) @map("criado_em")
+  updatedAt             DateTime            @updatedAt @map("atualizado_em")
+  requester             User                @relation("AppointmentRequester", fields: [requesterId], references: [id])
+  extensionist          User?               @relation("AppointmentExtensionist", fields: [extensionistId], references: [id])
+  service               Service             @relation(fields: [serviceId], references: [id])
+  property              Property            @relation(fields: [propertyId], references: [id])
+  availability          Availability?       @relation(fields: [availabilityId], references: [id])
+
+  @@index([requesterId, createdAt], map: "agendamento_solicitante_criado_em_idx")
+  @@index([extensionistId, scheduledStart], map: "agendamento_extensionista_inicio_idx")
+  @@index([availabilityId], map: "agendamento_disponibilidade_id_idx")
+  @@index([status, createdAt], map: "agendamento_status_criado_em_idx")
+  @@index([serviceId], map: "agendamento_servico_id_idx")
+  @@index([propertyId], map: "agendamento_propriedade_id_idx")
+  @@map("agendamento")
+}
+
+model AuditLog {
+  id                    String        @id @default(cuid())
+  userId                String        @map("usuario_id")
+  entity                String        @map("entidade")
+  entityId              String        @map("entidade_id")
+  action                ActionType    @map("acao")
+  payload               Json?         @map("dados")
+  createdAt             DateTime      @default(now()) @map("criado_em")
+  user                  User          @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt], map: "auditoria_usuario_criado_em_idx")
+  @@index([entity, entityId], map: "auditoria_entidade_entidade_id_idx")
+  @@map("auditoria")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String    @map("usuario_id")
+  title     String    @map("titulo")
+  message   String    @db.Text @map("mensagem")
+  readAt    DateTime? @map("lido_em")
+  createdAt DateTime  @default(now()) @map("criado_em")
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt], map: "notificacao_usuario_criado_em_idx")
+  @@index([readAt], map: "notificacao_lido_em_idx")
+  @@map("notificacao")
+}
