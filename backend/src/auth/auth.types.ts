@@ -6,6 +6,7 @@ export type AuthenticatedUser = {
   email: string;
   document: string;
   role: UserRole;
+  mustChangePassword: boolean;
   attendanceMunicipalities?: Array<{
     municipality: {
       id: string;

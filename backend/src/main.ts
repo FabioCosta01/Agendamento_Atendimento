@@ -14,11 +14,11 @@ async function bootstrap() {
   const port = configService.get<number>('PORT', 3001);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
   const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
-  const allowedOrigins = new Set([
-    frontendUrl,
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-  ]);
+  const allowedOrigins =
+    nodeEnv === 'production'
+      ? [frontendUrl].filter((origin): origin is string => Boolean(origin))
+      : ['http://localhost:5173', 'http://127.0.0.1:5173', frontendUrl];
+  const allowedOriginSet = new Set(allowedOrigins);
   const isAllowedLocalNetworkOrigin = (origin: string) => {
     try {
       const url = new URL(origin);
@@ -59,7 +59,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
-      if (!origin || allowedOrigins.has(origin) || (nodeEnv !== 'production' && isAllowedLocalNetworkOrigin(origin))) {
+      if (!origin || allowedOriginSet.has(origin) || (nodeEnv !== 'production' && isAllowedLocalNetworkOrigin(origin))) {
         callback(null, true);
         return;
       }

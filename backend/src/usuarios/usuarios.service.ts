@@ -129,16 +129,19 @@ export class UsuariosService {
 
   async registerRequester(registerRequesterDto: CadastrarSolicitanteDto) {
     const data = this.normalizeRequesterRegistration(registerRequesterDto);
-    const email = `${data.document}@cadastro.local`;
+    const email = data.email;
     const existingUser = await this.prisma.user.findFirst({
       where: {
         OR: [{ email }, { document: data.document }],
       },
-      select: { id: true },
+      select: { id: true, document: true, email: true },
     });
 
     if (existingUser) {
-      throw new ConflictException('Ja existe cadastro para este CPF');
+      if (existingUser.document === data.document) {
+        throw new ConflictException('Ja existe cadastro para este CPF');
+      }
+      throw new ConflictException('E-mail ja cadastrado');
     }
 
     const user = await this.prisma.user.create({
@@ -305,6 +308,7 @@ export class UsuariosService {
 
   private normalizeRequesterRegistration(payload: CadastrarSolicitanteDto) {
     const document = payload.document.replace(/\D/g, '');
+    const email = payload.email.trim().toLowerCase();
     const phone = payload.phone.replace(/\D/g, '');
     const name = payload.name.trim().replace(/\s+/g, ' ');
     const community = payload.community.trim().replace(/\s+/g, ' ');
@@ -313,6 +317,10 @@ export class UsuariosService {
 
     if (!this.isValidCpf(document)) {
       throw new BadRequestException('CPF invalido');
+    }
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new BadRequestException('E-mail invalido');
     }
 
     if (password.length < 8) {
@@ -333,6 +341,7 @@ export class UsuariosService {
 
     return {
       document,
+      email,
       name,
       password,
       phone,
@@ -369,7 +378,7 @@ export class UsuariosService {
     userId: string,
     entity: string,
     entityId: string,
-    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'STATUS_CHANGE',
+    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'STATUS_CHANGE' | 'PASSWORD_RESET',
     payload?: Record<string, string | boolean>,
   ) {
     await this.prisma.auditLog

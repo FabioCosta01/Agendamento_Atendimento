@@ -31,6 +31,7 @@ enum ActionType {
   DELETE
   LOGIN
   STATUS_CHANGE
+  PASSWORD_RESET
 
   @@map("tipo_acao")
 }
@@ -42,6 +43,7 @@ model User {
   document         String             @unique(map: "usuario_documento_key") @map("documento")
   passwordHash     String             @map("senha_hash")
   phone            String?            @map("telefone")
+  mustChangePassword Boolean          @default(false) @map("deve_trocar_senha")
   role             UserRole           @map("perfil")
   isActive         Boolean            @default(true) @map("ativo")
   createdAt        DateTime           @default(now()) @map("criado_em")

@@ -447,14 +447,38 @@ async function main() {
     },
   });
 
+  const seedMunicipality = await prisma.serviceMunicipality.findUnique({
+    where: { name_state: { name: 'Cuiabá', state: 'MT' } },
+  });
+  if (!seedMunicipality) {
+    throw new Error('Municipio Cuiaba nao encontrado apos seed de municipios');
+  }
+
+  await prisma.extensionistMunicipality.upsert({
+    where: {
+      extensionistId_municipalityId: {
+        extensionistId: extensionist.id,
+        municipalityId: seedMunicipality.id,
+      },
+    },
+    update: {},
+    create: {
+      extensionistId: extensionist.id,
+      municipalityId: seedMunicipality.id,
+    },
+  });
+
   await prisma.availability.upsert({
     where: { id: 'seed-disponibilidade-1' },
-    update: {},
+    update: {
+      municipalityId: seedMunicipality.id,
+    },
     create: {
       id: 'seed-disponibilidade-1',
       extensionistId: extensionist.id,
-      startDateTime: new Date('2026-04-21T13:00:00.000Z'),
-      endDateTime: new Date('2026-04-21T17:00:00.000Z'),
+      municipalityId: seedMunicipality.id,
+      startDateTime: new Date('2026-12-15T13:00:00.000Z'),
+      endDateTime: new Date('2026-12-15T17:00:00.000Z'),
       capacity: 4,
       notes: 'Bloco inicial de atendimento',
     },

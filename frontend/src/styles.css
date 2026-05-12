@@ -347,6 +347,97 @@ label {
   color: #102b4e;
 }
 
+.login-recover-row {
+  margin-top: 4px;
+  text-align: center;
+}
+
+button.login-text-action {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+button.login-text-action:hover {
+  color: #1e5a9e;
+}
+
+.password-gate-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  background:
+    linear-gradient(135deg, #eef4fa 0%, #f9fbfe 58%, #edf4fb 100%);
+}
+
+.password-gate-card {
+  width: min(100%, 440px);
+  border-radius: 20px;
+  padding: 28px 30px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.password-gate-card h2 {
+  margin: 6px 0 10px;
+  color: #102b4e;
+  font-size: 1.45rem;
+}
+
+.password-gate-card > p {
+  color: var(--muted);
+  margin: 0 0 18px;
+  line-height: 1.45;
+}
+
+.password-gate-form {
+  margin-top: 8px;
+}
+
+.recover-overlay {
+  z-index: 90;
+}
+
+.recover-dialog .recover-form > p {
+  margin: 0 0 12px;
+  font-size: 0.92rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.recover-provisional-label {
+  font-size: 0.78rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 14px 0 6px;
+}
+
+.recover-provisional-value {
+  font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  word-break: break-all;
+  color: #0f172a;
+}
+
+.recover-dialog-actions {
+  margin-top: 18px;
+}
+
 .login-mode-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1168,6 +1259,51 @@ label {
   border-color: rgba(31, 94, 168, 0.3);
   background: linear-gradient(135deg, var(--blue), var(--blue-dark));
   color: #fff;
+}
+
+/* Agendados: Semana / Mes atual / Escolher mes — cores institucionais distintas */
+.booked-period-tabs button {
+  border-radius: 10px;
+  font-weight: 750;
+}
+
+.booked-period-tabs button.booked-filter-week {
+  border-color: rgba(13, 148, 136, 0.42);
+  background: linear-gradient(180deg, #f0fdfa, #e6fffa);
+  color: #0f766e;
+}
+
+.booked-period-tabs button.booked-filter-week.active {
+  border-color: rgba(13, 148, 136, 0.55);
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(13, 148, 136, 0.28);
+}
+
+.booked-period-tabs button.booked-filter-current-month {
+  border-color: rgba(31, 94, 168, 0.38);
+  background: linear-gradient(180deg, #f7fbff, #e8f2fc);
+  color: var(--blue-dark);
+}
+
+.booked-period-tabs button.booked-filter-current-month.active {
+  border-color: rgba(31, 94, 168, 0.45);
+  background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(31, 94, 168, 0.28);
+}
+
+.booked-period-tabs button.booked-filter-pick-month {
+  border-color: rgba(79, 70, 229, 0.38);
+  background: linear-gradient(180deg, #f5f3ff, #ede9fe);
+  color: #4338ca;
+}
+
+.booked-period-tabs button.booked-filter-pick-month.active {
+  border-color: rgba(79, 70, 229, 0.5);
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.28);
 }
 
 .admin-agenda-manager {
@@ -3989,4 +4125,16 @@ button.danger-action {
   .confirm-actions {
     grid-template-columns: 1fr;
   }
+}
+
+/* CPF validation (login, cadastro, admin) */
+.input-error {
+  border: 1px solid #dc2626 !important;
+  outline-color: #dc2626;
+}
+
+.error-message {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-top: 4px;
 }

@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "npm --prefix .. run build -w shared",
+    "predev": "npm --prefix .. run build -w shared",
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "format": "prettier --check \"src/**/*.{ts,tsx,css}\"",

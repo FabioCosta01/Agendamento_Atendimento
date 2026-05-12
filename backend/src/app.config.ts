@@ -47,7 +47,7 @@ export function validateEnvironment(config: Env) {
     const hasUpperCase = /[A-Z]/.test(jwtSecret);
     const hasLowerCase = /[a-z]/.test(jwtSecret);
     const hasNumbers = /\d/.test(jwtSecret);
-    const hasSpecialChars = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/.test(jwtSecret);
+    const hasSpecialChars = /[^a-zA-Z0-9]/.test(jwtSecret);
 
     if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChars) {
       throw new Error('JWT_SECRET deve conter letras maiusculas, minusculas, numeros e caracteres especiais');

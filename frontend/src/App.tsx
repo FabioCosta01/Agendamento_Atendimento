@@ -17,6 +17,8 @@ import {
   getApiErrorMessage,
   hydrateAuthToken,
   login,
+  completeMandatoryPasswordChange,
+  recoverPassword,
   markNotificationAsRead,
   registerRequester,
   rescheduleAppointment,
@@ -31,6 +33,7 @@ import {
   type SessionUser,
   type UserRecord,
 } from './lib/api';
+import { formatCPF, isValidCPF, validateCPFProgress } from './lib/cpf';
 import { LocalMessagesContainer, useLocalMessages } from './components/LocalMessages';
 
 const emptyData: DashboardPayload = {
@@ -130,11 +133,17 @@ const defaultServiceClassification = 'Outros atendimentos';
 const initialRequesterRegistrationForm = {
   document: '',
   name: '',
+  email: '',
   password: '',
   phone: '',
   community: '',
   city: '',
 };
+
+function isValidEmailFormat(value: string) {
+  const v = value.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
 
 type SectionKey = 'novo' | 'protocolos' | 'notificacoes' | 'propriedades' | 'atendimentos' | 'agenda' | 'usuarios' | 'servicos';
 
@@ -160,54 +169,6 @@ function toDateInputValue(date: Date) {
   const day = String(date.getDate()).padStart(2, '0');
 
   return `${year}-${month}-${day}`;
-}
-
-function calculateCpfCheckDigit(numbers: number[], weight: number) {
-  const sum = numbers.reduce((total, number) => {
-    const nextTotal = total + number * weight;
-    weight -= 1;
-
-    return nextTotal;
-  }, 0);
-  const remainder = (sum * 10) % 11;
-
-  return remainder === 10 ? 0 : remainder;
-}
-
-function isValidCpf(value: string) {
-  const document = value.replace(/\D/g, '');
-
-  if (!/^\d{11}$/.test(document) || /^(\d)\1{10}$/.test(document)) {
-    return false;
-  }
-
-  const digits = document.split('').map(Number);
-  const firstCheck = calculateCpfCheckDigit(digits.slice(0, 9), 10);
-  const secondCheck = calculateCpfCheckDigit([...digits.slice(0, 9), firstCheck], 11);
-
-  return digits[9] === firstCheck && digits[10] === secondCheck;
-}
-
-function formatCpf(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 11);
-
-  if (!digits) {
-    return value;
-  }
-
-  if (digits.length <= 3) {
-    return digits;
-  }
-
-  if (digits.length <= 6) {
-    return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-  }
-
-  if (digits.length <= 9) {
-    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-  }
-
-  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 }
 
 function toMonthInputValue(date: Date) {
@@ -435,10 +396,22 @@ function escapeHtml(value: string) {
 
 export default function App() {
   const [loginDocument, setLoginDocument] = useState('');
+  const [loginDocumentCpfError, setLoginDocumentCpfError] = useState('');
   const [password, setPassword] = useState('');
   const [loginMode, setLoginMode] = useState<'login' | 'register'>('login');
   const [loginError, setLoginError] = useState('');
   const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [recoverModalOpen, setRecoverModalOpen] = useState(false);
+  const [recoverDocument, setRecoverDocument] = useState('');
+  const [recoverDocumentCpfError, setRecoverDocumentCpfError] = useState('');
+  const [recoverPhone, setRecoverPhone] = useState('');
+  const [recoverSubmitting, setRecoverSubmitting] = useState(false);
+  const [recoverError, setRecoverError] = useState('');
+  const [recoverProvisionalPassword, setRecoverProvisionalPassword] = useState<string | null>(null);
+  const [mandatoryNewPassword, setMandatoryNewPassword] = useState('');
+  const [mandatoryConfirmPassword, setMandatoryConfirmPassword] = useState('');
+  const [mandatoryPasswordError, setMandatoryPasswordError] = useState('');
+  const [mandatoryPasswordSubmitting, setMandatoryPasswordSubmitting] = useState(false);
   const [registrationForm, setRegistrationForm] = useState(initialRequesterRegistrationForm);
   const [registrationErrors, setRegistrationErrors] = useState<Partial<Record<keyof typeof initialRequesterRegistrationForm, string>>>({});
   const [, setLoading] = useState(true);
@@ -447,6 +420,7 @@ export default function App() {
   const [data, setData] = useState<DashboardPayload>(emptyData);
   const [dataError, setDataError] = useState('');
   const localMessages = useLocalMessages();
+  const { clearMessages: clearLocalMessages } = localMessages;
   const [appointmentForm, setAppointmentForm] = useState(initialAppointmentForm);
   const [propertyForm, setPropertyForm] = useState(initialPropertyForm);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
@@ -457,6 +431,7 @@ export default function App() {
   const [selectedProtocol, setSelectedProtocol] = useState<AppointmentRecord | null>(null);
   const [activeAgendaActionId, setActiveAgendaActionId] = useState<string | null>(null);
   const [userForm, setUserForm] = useState(initialUserForm);
+  const [userFormDocumentError, setUserFormDocumentError] = useState('');
   const [adminUserRoleFilter, setAdminUserRoleFilter] = useState<UserRole | ''>('');
   const [selectedAdminUserId, setSelectedAdminUserId] = useState('');
   const [requesters, setRequesters] = useState<UserRecord[]>([]);
@@ -999,7 +974,7 @@ export default function App() {
     isExtensionist,
     isRequester,
     monthlyAvailabilityCount,
-    myProperties.length,
+    requesters.length,
     uniqueServices.length,
     unreadNotifications,
     visibleAppointments.length,
@@ -1326,11 +1301,17 @@ export default function App() {
       try {
         if (token) {
           const me = await fetchCurrentUser();
-          const nextData = await fetchDashboardData(me.role);
 
           if (active) {
             setCurrentUser(me);
-            setData(nextData);
+            if (!me.mustChangePassword) {
+              const nextData = await fetchDashboardData(me.role);
+              if (active) {
+                setData(nextData);
+              }
+            } else {
+              setData(emptyData);
+            }
           }
         }
       } catch (error) {
@@ -1366,14 +1347,14 @@ export default function App() {
   }, [activeSection]);
 
   useEffect(() => {
-    localMessages.clearMessages();
-  }, [activeSection]);
+    clearLocalMessages();
+  }, [activeSection, clearLocalMessages]);
 
   useEffect(() => {
     if (isExtensionist && activeSection === 'propriedades' && requesters.length === 0) {
       void loadRequesters();
     }
-  }, [isExtensionist, activeSection, requesters.length]);
+  }, [isExtensionist, activeSection, requesters.length]); // eslint-disable-line react-hooks/exhaustive-deps -- loadRequesters is stable for this guard
 
   useEffect(() => {
     setAppointmentForm((current) => ({
@@ -1479,12 +1460,19 @@ export default function App() {
 
     if (!document) {
       errors.document = 'Campo obrigatório';
-    } else if (!isValidCpf(document)) {
-      errors.document = 'CPF inválido';
+    } else if (!isValidCPF(document)) {
+      errors.document = 'CPF inválido. Digite um CPF válido.';
     }
 
     if (!form.name.trim()) {
       errors.name = 'Campo obrigatório';
+    }
+
+    const email = form.email.trim().toLowerCase();
+    if (!email) {
+      errors.email = 'Campo obrigatório';
+    } else if (!isValidEmailFormat(email)) {
+      errors.email = 'E-mail inválido';
     }
 
     if (!form.password) {
@@ -1517,8 +1505,10 @@ export default function App() {
     setLoginError('');
 
     const cleanDocument = loginDocument.replace(/\D/g, '');
-    if (!isValidCpf(cleanDocument)) {
-      setLoginError('Informe um CPF válido');
+    const cpfErrorMessage = validateCPFProgress(formatCPF(loginDocument));
+
+    if (cpfErrorMessage || cleanDocument.length !== 11) {
+      setLoginError('CPF inválido. Digite um CPF válido.');
       return;
     }
 
@@ -1529,7 +1519,11 @@ export default function App() {
       setAuthToken(response.token);
       setCurrentUser(response.user);
       setActiveSection(response.user.role === UserRole.SOLICITANTE ? 'novo' : 'atendimentos');
-      await refreshData(response.user.role);
+      if (!response.user.mustChangePassword) {
+        await refreshData(response.user.role);
+      } else {
+        setData(emptyData);
+      }
     } catch (error) {
       setLoginError(getApiErrorMessage(error, 'Falha no login. Confira documento e senha.'));
       console.error(error);
@@ -1556,6 +1550,7 @@ export default function App() {
     try {
       await registerRequester({
         document: cleanDocument,
+        email: registrationForm.email.trim().toLowerCase(),
         name: registrationForm.name,
         password: registrationForm.password,
         phone: registrationForm.phone,
@@ -1569,11 +1564,19 @@ export default function App() {
       setRegistrationForm(initialRequesterRegistrationForm);
       setActiveSection('novo');
       localMessages.addMessage('success', 'Cadastro criado com sucesso.');
-      await refreshData(response.user.role);
+      if (!response.user.mustChangePassword) {
+        await refreshData(response.user.role);
+      } else {
+        setData(emptyData);
+      }
     } catch (error) {
       const backendMessage = getApiErrorMessage(error, 'Nao foi possivel concluir o cadastro.');
       if (backendMessage.includes('Ja existe cadastro')) {
         setRegistrationErrors({ document: 'CPF ja cadastrado' });
+      } else if (backendMessage.includes('E-mail ja cadastrado')) {
+        setRegistrationErrors({ email: 'E-mail ja cadastrado' });
+      } else if (backendMessage.toLowerCase().includes('e-mail invalido')) {
+        setRegistrationErrors({ email: 'E-mail invalido' });
       } else if (backendMessage.includes('CPF invalido')) {
         setRegistrationErrors({ document: 'CPF invalido' });
       } else if (backendMessage.includes('Telefone')) {
@@ -1589,11 +1592,94 @@ export default function App() {
     }
   }
 
+  async function handleRecoverPasswordSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRecoverError('');
+    setRecoverProvisionalPassword(null);
+
+    const cleanDoc = recoverDocument.replace(/\D/g, '');
+    if (cleanDoc.length !== 11 || !isValidCPF(cleanDoc)) {
+      setRecoverError('CPF inválido. Digite um CPF válido.');
+      return;
+    }
+
+    const phoneDigits = recoverPhone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      setRecoverError('Informe o telefone cadastrado com DDD.');
+      return;
+    }
+
+    setRecoverSubmitting(true);
+
+    try {
+      const result = await recoverPassword({ document: cleanDoc, phone: phoneDigits });
+      setRecoverProvisionalPassword(result.provisionalPassword);
+    } catch (error) {
+      setRecoverError(getApiErrorMessage(error, 'Não foi possível concluir a recuperação.'));
+      console.error(error);
+    } finally {
+      setRecoverSubmitting(false);
+    }
+  }
+
+  function closeRecoverModal() {
+    setRecoverModalOpen(false);
+    setRecoverDocument('');
+    setRecoverDocumentCpfError('');
+    setRecoverPhone('');
+    setRecoverError('');
+    setRecoverProvisionalPassword(null);
+  }
+
+  async function handleMandatoryPasswordChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMandatoryPasswordError('');
+
+    if (!currentUser) {
+      return;
+    }
+
+    if (mandatoryNewPassword.length < 8) {
+      setMandatoryPasswordError('A nova senha deve ter pelo menos 8 caracteres.');
+      return;
+    }
+
+    if (mandatoryNewPassword !== mandatoryConfirmPassword) {
+      setMandatoryPasswordError('As senhas não conferem.');
+      return;
+    }
+
+    const docDigits = currentUser.document.replace(/\D/g, '');
+    if (mandatoryNewPassword.replace(/\D/g, '') === docDigits || mandatoryNewPassword === '12345678') {
+      setMandatoryPasswordError('Use uma senha diferente do CPF e de senhas muito comuns.');
+      return;
+    }
+
+    setMandatoryPasswordSubmitting(true);
+
+    try {
+      await completeMandatoryPasswordChange(mandatoryNewPassword);
+      const me = await fetchCurrentUser();
+      setCurrentUser(me);
+      setMandatoryNewPassword('');
+      setMandatoryConfirmPassword('');
+      await refreshData(me.role);
+    } catch (error) {
+      setMandatoryPasswordError(getApiErrorMessage(error, 'Não foi possível atualizar a senha.'));
+      console.error(error);
+    } finally {
+      setMandatoryPasswordSubmitting(false);
+    }
+  }
+
   function handleLogout() {
     setCurrentUser(null);
     setAuthToken(null);
     setData(emptyData);
     setActiveSection('novo');
+    setMandatoryNewPassword('');
+    setMandatoryConfirmPassword('');
+    setMandatoryPasswordError('');
   }
 
   async function handleCreateAppointment(event: FormEvent<HTMLFormElement>) {
@@ -1954,16 +2040,16 @@ export default function App() {
       return;
     }
 
-    const protocolCode = escapeHtml(appointment.protocolCode);
-    const status = escapeHtml(getStatusLabel(appointment.status));
-    const service = escapeHtml(appointment.service?.name ?? 'Nao informado');
-    const property = escapeHtml(appointment.property?.displayName ?? 'Nao informada');
-    const requester = escapeHtml(appointment.requester?.name ?? currentUser?.name ?? 'Nao informado');
-    const document = escapeHtml(formatCpf(appointment.requester?.document ?? currentUser?.document ?? 'Nao informado'));
-    const date = escapeHtml(formatDate(appointment.scheduledStart ?? appointment.preferredDate));
-    const extensionist = escapeHtml(appointment.extensionist?.name ?? 'Nao definido');
-    const notes = escapeHtml(appointment.notes ?? 'Sem observacao');
-    const justification = escapeHtml(appointment.justification ?? 'Sem justificativa');
+    const protocolCode = escapeHtml(protocol.protocolCode);
+    const status = escapeHtml(getStatusLabel(protocol.status));
+    const service = escapeHtml(protocol.service?.name ?? 'Nao informado');
+    const property = escapeHtml(protocol.property?.displayName ?? 'Nao informada');
+    const requester = escapeHtml(protocol.requester?.name ?? currentUser?.name ?? 'Nao informado');
+    const cpfForPrint = escapeHtml(formatCPF(protocol.requester?.document ?? currentUser?.document ?? 'Nao informado'));
+    const date = escapeHtml(formatDate(protocol.scheduledStart ?? protocol.preferredDate));
+    const extensionist = escapeHtml(protocol.extensionist?.name ?? 'Nao definido');
+    const notes = escapeHtml(protocol.notes ?? 'Sem observacao');
+    const justification = escapeHtml(protocol.justification ?? 'Sem justificativa');
     const issuedAt = escapeHtml(new Date().toLocaleString('pt-BR'));
 
     printWindow.document.write(`
@@ -2190,7 +2276,7 @@ export default function App() {
               </div>
               <div class="field">
                 <span>Documento (CPF)</span>
-                <strong>${document}</strong>
+                <strong>${cpfForPrint}</strong>
               </div>
               <div class="field">
                 <span>Propriedade</span>
@@ -2232,7 +2318,7 @@ export default function App() {
     event.preventDefault();
 
     try {
-      const appointment = await rescheduleAppointment(rescheduleForm.protocolCode, {
+      await rescheduleAppointment(rescheduleForm.protocolCode, {
         availabilityId: rescheduleForm.availabilityId,
         justification: rescheduleForm.justification,
       });
@@ -2259,10 +2345,22 @@ export default function App() {
   async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    const formatted = formatCPF(userForm.document);
+    const cpfErrorMessage = validateCPFProgress(formatted);
+    const digits = userForm.document.replace(/\D/g, '');
+
+    if (cpfErrorMessage || digits.length !== 11) {
+      setUserFormDocumentError('CPF inválido. Digite um CPF válido.');
+      return;
+    }
+
+    setUserFormDocumentError('');
+
     try {
       await createUser(userForm);
       localMessages.addMessage('success', 'Usuario cadastrado.');
       setUserForm(initialUserForm);
+      setUserFormDocumentError('');
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel cadastrar o usuario.'));
@@ -2364,8 +2462,54 @@ export default function App() {
     );
   }
 
+  if (currentUser?.mustChangePassword) {
+    return (
+      <main className="password-gate-screen">
+        <section className="password-gate-card">
+          <span className="form-kicker">Segurança da conta</span>
+          <h2>Defina uma nova senha</h2>
+          <p>
+            Sua conta está com troca de senha obrigatória. Escolha uma senha forte antes de continuar usando o
+            sistema.
+          </p>
+          <form className="compact-form password-gate-form" onSubmit={handleMandatoryPasswordChange}>
+            <label>
+              Nova senha
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={mandatoryNewPassword}
+                onChange={(event) => {
+                  setMandatoryNewPassword(event.target.value);
+                  setMandatoryPasswordError('');
+                }}
+              />
+            </label>
+            <label>
+              Confirmar nova senha
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={mandatoryConfirmPassword}
+                onChange={(event) => {
+                  setMandatoryConfirmPassword(event.target.value);
+                  setMandatoryPasswordError('');
+                }}
+              />
+            </label>
+            {mandatoryPasswordError ? <p className="alert error">{mandatoryPasswordError}</p> : null}
+            <button type="submit" disabled={mandatoryPasswordSubmitting}>
+              {mandatoryPasswordSubmitting ? 'Salvando...' : 'Salvar e continuar'}
+            </button>
+          </form>
+        </section>
+      </main>
+    );
+  }
+
   if (!currentUser) {
     return (
+      <>
       <main className="login-page">
         <section className="login-intro">
           <span className="brand-badge">Portal institucional</span>
@@ -2408,6 +2552,8 @@ export default function App() {
               onClick={() => {
                 setLoginMode('login');
                 setLoginError('');
+                setLoginDocumentCpfError('');
+                closeRecoverModal();
               }}
             >
               Entrar
@@ -2418,6 +2564,8 @@ export default function App() {
               onClick={() => {
                 setLoginMode('register');
                 setLoginError('');
+                setLoginDocumentCpfError('');
+                closeRecoverModal();
               }}
             >
               Cadastrar
@@ -2429,41 +2577,69 @@ export default function App() {
               <label>
                 Documento (CPF)
                 <input
-                  value={formatCpf(loginDocument)}
+                  value={formatCPF(loginDocument)}
                   inputMode="numeric"
-                  onChange={(event) => setLoginDocument(event.target.value.replace(/\D/g, '').slice(0, 11))}
+                  maxLength={14}
+                  className={loginDocumentCpfError ? 'input-error' : ''}
+                  onChange={(event) => {
+                    const formatted = formatCPF(event.target.value);
+                    const digits = formatted.replace(/\D/g, '').slice(0, 11);
+                    setLoginDocument(digits);
+                    setLoginDocumentCpfError(validateCPFProgress(formatted));
+                  }}
                 />
+                {loginDocumentCpfError ? <small className="error-message">{loginDocumentCpfError}</small> : null}
               </label>
               <label>
                 Senha
                 <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
               </label>
-              <button type="submit" disabled={loginSubmitting || !isValidCpf(loginDocument)}>
+              <button
+                type="submit"
+                disabled={
+                  loginSubmitting ||
+                  validateCPFProgress(formatCPF(loginDocument)) !== '' ||
+                  loginDocument.replace(/\D/g, '').length !== 11
+                }
+              >
                 {loginSubmitting ? 'Entrando...' : 'Acessar'}
               </button>
+              <div className="login-recover-row">
+                <button
+                  type="button"
+                  className="login-text-action"
+                  onClick={() => {
+                    setRecoverModalOpen(true);
+                    setRecoverDocument('');
+                    setRecoverDocumentCpfError('');
+                    setRecoverPhone('');
+                    setRecoverError('');
+                    setRecoverProvisionalPassword(null);
+                  }}
+                >
+                  Recuperar senha
+                </button>
+              </div>
             </form>
           ) : (
             <form className="compact-form" onSubmit={handleRequesterRegistration}>
               <label className={registrationErrors.document ? 'invalid' : ''}>
                 CPF
                 <input
-                  value={formatCpf(registrationForm.document)}
+                  value={formatCPF(registrationForm.document)}
                   inputMode="numeric"
+                  maxLength={14}
+                  className={registrationErrors.document ? 'input-error' : ''}
                   onChange={(event) => {
-                    const value = event.target.value.replace(/\D/g, '').slice(0, 11);
-                    setRegistrationForm((current) => ({ ...current, document: value }));
-                    
-                    if (value.length === 11 && !isValidCpf(value)) {
-                      setRegistrationErrors((current) => ({ ...current, document: 'CPF inválido' }));
-                    } else if (value.length < 11) {
-                      setRegistrationErrors((current) => ({ ...current, document: undefined }));
-                    } else if (isValidCpf(value)) {
-                      setRegistrationErrors((current) => ({ ...current, document: undefined }));
-                    }
+                    const formatted = formatCPF(event.target.value);
+                    const digits = formatted.replace(/\D/g, '').slice(0, 11);
+                    setRegistrationForm((current) => ({ ...current, document: digits }));
+                    const err = validateCPFProgress(formatted);
+                    setRegistrationErrors((current) => ({ ...current, document: err || undefined }));
                   }}
                 />
                 {registrationErrors.document ? (
-                  <small className="field-error">{registrationErrors.document}</small>
+                  <small className="error-message">{registrationErrors.document}</small>
                 ) : null}
               </label>
               <label className={registrationErrors.name ? 'invalid' : ''}>
@@ -2477,6 +2653,22 @@ export default function App() {
                 />
                 {registrationErrors.name ? (
                   <small className="field-error">{registrationErrors.name}</small>
+                ) : null}
+              </label>
+              <label className={registrationErrors.email ? 'invalid' : ''}>
+                E-mail
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={registrationForm.email}
+                  className={registrationErrors.email ? 'input-error' : ''}
+                  onChange={(event) => {
+                    setRegistrationForm((current) => ({ ...current, email: event.target.value }));
+                    setRegistrationErrors((current) => ({ ...current, email: undefined }));
+                  }}
+                />
+                {registrationErrors.email ? (
+                  <small className="field-error">{registrationErrors.email}</small>
                 ) : null}
               </label>
               <label className={registrationErrors.password ? 'invalid' : ''}>
@@ -2553,6 +2745,84 @@ export default function App() {
           {loginError || dataError ? <p className="alert error">{loginError || dataError}</p> : null}
         </section>
       </main>
+
+      {recoverModalOpen ? (
+        <div
+          className="confirm-overlay recover-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="recover-dialog-title"
+        >
+          <div className="confirm-dialog recover-dialog">
+            <span className="form-kicker">Recuperação de acesso</span>
+            <h2 id="recover-dialog-title">Recuperar senha</h2>
+            {recoverProvisionalPassword ? (
+              <>
+                <p>
+                  Senha provisória gerada. Anote-a com segurança. No próximo acesso será obrigatório definir uma nova
+                  senha.
+                </p>
+                <p className="recover-provisional-label">Senha provisória (copie agora)</p>
+                <div className="recover-provisional-value">{recoverProvisionalPassword}</div>
+                <div className="confirm-actions recover-dialog-actions">
+                  <button type="button" className="secondary" onClick={closeRecoverModal}>
+                    Fechar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <form className="compact-form recover-form" onSubmit={handleRecoverPasswordSubmit}>
+                <p>Informe o CPF e o telefone cadastrados na sua conta. Se os dados conferirem, uma senha provisória será gerada.</p>
+                <label>
+                  CPF
+                  <input
+                    value={formatCPF(recoverDocument)}
+                    inputMode="numeric"
+                    maxLength={14}
+                    className={recoverDocumentCpfError ? 'input-error' : ''}
+                    onChange={(event) => {
+                      const formatted = formatCPF(event.target.value);
+                      const digits = formatted.replace(/\D/g, '').slice(0, 11);
+                      setRecoverDocument(digits);
+                      setRecoverDocumentCpfError(validateCPFProgress(formatted));
+                    }}
+                  />
+                  {recoverDocumentCpfError ? <small className="error-message">{recoverDocumentCpfError}</small> : null}
+                </label>
+                <label>
+                  Telefone (cadastrado)
+                  <input
+                    value={recoverPhone}
+                    inputMode="tel"
+                    onChange={(event) => {
+                      const value = event.target.value.replace(/\D/g, '').slice(0, 11);
+                      setRecoverPhone(value);
+                    }}
+                  />
+                </label>
+                {recoverError ? <p className="alert error">{recoverError}</p> : null}
+                <div className="confirm-actions recover-dialog-actions">
+                  <button type="button" className="secondary" onClick={closeRecoverModal}>
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      recoverSubmitting ||
+                      validateCPFProgress(formatCPF(recoverDocument)) !== '' ||
+                      recoverDocument.replace(/\D/g, '').length !== 11 ||
+                      recoverPhone.replace(/\D/g, '').length < 10
+                    }
+                  >
+                    {recoverSubmitting ? 'Enviando...' : 'Gerar senha provisória'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      ) : null}
+      </>
     );
   }
 
@@ -3069,7 +3339,7 @@ export default function App() {
                         >
                           <div>
                             <strong>{extensionist.name}</strong>
-                            <span>{formatCpf(extensionist.document)}</span>
+                            <span>{formatCPF(extensionist.document)}</span>
                           </div>
                           <small>{appointmentsCount} atendimento(s)</small>
                           <small>{availabilityCount} horario(s) no mes</small>
@@ -3751,7 +4021,7 @@ export default function App() {
                         >
                           <div>
                             <strong>{extensionist.name}</strong>
-                            <span>{formatCpf(extensionist.document)}</span>
+                            <span>{formatCPF(extensionist.document)}</span>
                           </div>
                           <small>Gerenciar agenda</small>
                         </button>
@@ -4197,24 +4467,30 @@ export default function App() {
 
               {agendaView === 'booked' ? (
                 <div className="booked-view">
-                  <div className="agenda-tabs compact-tabs" aria-label="Filtro de concluidos">
+                  <div className="agenda-tabs compact-tabs booked-period-tabs" aria-label="Filtro de periodo nos agendados">
                     <button
                       type="button"
-                      className={completedFilter === 'week' ? 'active' : ''}
+                      className={['booked-filter-week', completedFilter === 'week' ? 'active' : '']
+                        .filter(Boolean)
+                        .join(' ')}
                       onClick={() => setCompletedFilter('week')}
                     >
                       Semana
                     </button>
                     <button
                       type="button"
-                      className={completedFilter === 'currentMonth' ? 'active' : ''}
+                      className={['booked-filter-current-month', completedFilter === 'currentMonth' ? 'active' : '']
+                        .filter(Boolean)
+                        .join(' ')}
                       onClick={() => setCompletedFilter('currentMonth')}
                     >
                       Mes atual
                     </button>
                     <button
                       type="button"
-                      className={completedFilter === 'selectedMonth' ? 'active' : ''}
+                      className={['booked-filter-pick-month', completedFilter === 'selectedMonth' ? 'active' : '']
+                        .filter(Boolean)
+                        .join(' ')}
                       onClick={() => setCompletedFilter('selectedMonth')}
                     >
                       Escolher mes
@@ -4402,15 +4678,18 @@ export default function App() {
               <input placeholder="E-mail" value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} />
               <input
                 placeholder="Documento (CPF)"
-                value={formatCpf(userForm.document)}
+                value={formatCPF(userForm.document)}
                 inputMode="numeric"
-                onChange={(event) =>
-                  setUserForm((current) => ({
-                    ...current,
-                    document: event.target.value.replace(/\D/g, '').slice(0, 11),
-                  }))
-                }
+                maxLength={14}
+                className={userFormDocumentError ? 'input-error' : ''}
+                onChange={(event) => {
+                  const formatted = formatCPF(event.target.value);
+                  const nextDigits = formatted.replace(/\D/g, '').slice(0, 11);
+                  setUserForm((current) => ({ ...current, document: nextDigits }));
+                  setUserFormDocumentError(validateCPFProgress(formatted));
+                }}
               />
+              {userFormDocumentError ? <small className="error-message">{userFormDocumentError}</small> : null}
               <input
                 type="password"
                 placeholder="Senha inicial"
@@ -4422,7 +4701,15 @@ export default function App() {
                 <option value={UserRole.EXTENSIONISTA}>Extensionista</option>
                 <option value={UserRole.ADMINISTRADOR}>Administrador</option>
               </select>
-              <button type="submit" disabled={!userForm.name || !userForm.email || !userForm.document || userForm.password.length < 6}>
+              <button
+                type="submit"
+                disabled={
+                  !userForm.name ||
+                  !userForm.email ||
+                  !isValidCPF(userForm.document) ||
+                  userForm.password.length < 6
+                }
+              >
                 Cadastrar
               </button>
             </form>
@@ -4467,7 +4754,7 @@ export default function App() {
                   <option value="">Selecionar pessoa</option>
                   {filteredAdminUsers.map((user) => (
                     <option key={user.id} value={user.id}>
-                      {user.name} - {formatCpf(user.document)}
+                      {user.name} - {formatCPF(user.document)}
                     </option>
                   ))}
                 </select>
@@ -4492,7 +4779,7 @@ export default function App() {
                     <strong>{user.name}</strong>
                     <span>{user.role}</span>
                     <small>
-                      {user.isActive ? 'Ativo' : 'Inativo'} - {formatCpf(user.document)}
+                      {user.isActive ? 'Ativo' : 'Inativo'} - {formatCPF(user.document)}
                       {user.role === UserRole.EXTENSIONISTA && linkedMunicipalities.length > 0 ? (
                         <> - {linkedMunicipalities.length} municipio(s)</>
                       ) : null}

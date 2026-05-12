@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "npm --prefix .. run build -w shared",
+    "predev": "npm --prefix .. run build -w shared",
     "dev": "node scripts/validate-jwt.js && nest start --watch",
     "start": "node scripts/validate-jwt.js && node dist/src/main.js",
     "build": "nest build",

@@ -2,11 +2,11 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
 import { AgendamentosModule } from './agendamentos/agendamentos.module';
+import { validateEnvironment } from './app.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { SecurityMiddleware } from './common/security.middleware';
-import { validateEnvironment } from './app.config';
 import { DisponibilidadeAgendaModule } from './disponibilidade-agenda/disponibilidade-agenda.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { PontosAtendimentoModule } from './pontos-atendimento/pontos-atendimento.module';

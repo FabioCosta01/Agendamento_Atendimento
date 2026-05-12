@@ -85,6 +85,7 @@ export type SessionUser = {
   email: string;
   document: string;
   role: UserRole;
+  mustChangePassword?: boolean;
   attendanceMunicipalities?: Array<{
     municipality: {
       id: string;
@@ -240,6 +241,19 @@ export async function login(document: string, password: string) {
   return response.data;
 }
 
+export async function recoverPassword(payload: { document: string; phone: string }) {
+  const response = await api.post<{ message: string; provisionalPassword: string }>('/auth/recuperar-senha', {
+    document: payload.document.replace(/\D/g, ''),
+    phone: payload.phone.replace(/\D/g, ''),
+  });
+  return response.data;
+}
+
+export async function completeMandatoryPasswordChange(newPassword: string) {
+  const response = await api.post<{ message: string }>('/auth/trocar-senha-obrigatoria', { newPassword });
+  return response.data;
+}
+
 export async function fetchCurrentUser() {
   const response = await api.get<SessionUser>('/auth/me');
   return response.data;
@@ -311,6 +325,7 @@ export async function deleteProperty(id: string) {
 
 export async function registerRequester(payload: {
   document: string;
+  email: string;
   name: string;
   password: string;
   phone: string;

@@ -1,9 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
-import { AtualizarPropriedadeDto } from './dto/atualizar-propriedade.dto';
 import { CriarPropriedadeDto } from './dto/criar-propriedade.dto';
 import { PropriedadesService } from './propriedades.service';
 

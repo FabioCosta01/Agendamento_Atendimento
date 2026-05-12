@@ -55,6 +55,7 @@ export class JwtAuthGuard implements CanActivate {
           email: true,
           document: true,
           role: true,
+          mustChangePassword: true,
           attendanceMunicipalities: {
             select: {
               municipality: {
@@ -81,6 +82,7 @@ export class JwtAuthGuard implements CanActivate {
         email: activeUser.email,
         document: activeUser.document,
         role: activeUser.role,
+        mustChangePassword: activeUser.mustChangePassword,
         attendanceMunicipalities: activeUser.attendanceMunicipalities,
       };
 

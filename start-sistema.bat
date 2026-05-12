@@ -36,6 +36,24 @@ if not exist "%ROOT_DIR%node_modules" (
   )
 )
 
+if not exist "%ROOT_DIR%backend\.env" (
+  echo Arquivo backend\.env nao encontrado.
+  echo Copie backend\.env.example para backend\.env e configure DATABASE_URL e JWT_SECRET ^(minimo 32 caracteres^).
+  echo.
+  pause
+  exit /b 1
+)
+
+if not exist "%ROOT_DIR%shared\dist\index.js" (
+  echo Pacote shared sem build ^(dist^). Compilando shared...
+  call npm run build -w shared
+  if errorlevel 1 (
+    echo Falha ao compilar o pacote shared.
+    pause
+    exit /b 1
+  )
+)
+
 echo Liberando portas antigas, se necessario...
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":3001" ^| findstr "LISTENING"') do (
   echo Encerrando processo antigo na porta 3001: %%P

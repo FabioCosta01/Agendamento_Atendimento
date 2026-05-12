@@ -21,6 +21,7 @@ test('JwtService assina e valida token', () => {
     email: 'teste@example.com',
     document: '123',
     role: 'ADMINISTRADOR' as never,
+    mustChangePassword: false,
   });
 
   const payload = jwtService.verifyToken(token);

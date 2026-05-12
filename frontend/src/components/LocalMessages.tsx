@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export type MessageType = 'success' | 'error' | 'warning' | 'info';
 
@@ -43,9 +43,9 @@ export function useLocalMessages() {
     setMessages((prev) => prev.filter((msg) => msg.id !== id));
   };
 
-  const clearMessages = () => {
+  const clearMessages = useCallback(() => {
     setMessages([]);
-  };
+  }, []);
 
   return {
     messages,
