@@ -145,6 +145,24 @@ function isValidEmailFormat(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
+function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+
+  if (digits.length <= 2) {
+    return digits ? `(${digits}` : '';
+  }
+
+  if (digits.length <= 6) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  }
+
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 3)} ${digits.slice(3, 7)}-${digits.slice(7)}`;
+}
+
 type SectionKey = 'novo' | 'protocolos' | 'notificacoes' | 'propriedades' | 'atendimentos' | 'agenda' | 'usuarios' | 'servicos';
 
 type ConfirmDialogState = {
@@ -2696,8 +2714,9 @@ export default function App() {
               <label className={registrationErrors.phone ? 'invalid' : ''}>
                 Telefone
                 <input
-                  value={registrationForm.phone}
+                  value={formatPhone(registrationForm.phone)}
                   inputMode="tel"
+                  maxLength={16}
                   onChange={(event) => {
                     const value = event.target.value.replace(/\D/g, '').slice(0, 11);
                     setRegistrationForm((current) => ({ ...current, phone: value }));
@@ -2809,8 +2828,9 @@ export default function App() {
                 <label>
                   Telefone (cadastrado)
                   <input
-                    value={recoverPhone}
+                    value={formatPhone(recoverPhone)}
                     inputMode="tel"
+                    maxLength={16}
                     onChange={(event) => {
                       const value = event.target.value.replace(/\D/g, '').slice(0, 11);
                       setRecoverPhone(value);

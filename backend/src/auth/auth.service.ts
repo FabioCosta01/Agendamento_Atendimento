@@ -127,15 +127,17 @@ export class AuthService {
       },
     });
 
-    await this.prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        entity: 'User',
-        entityId: user.id,
-        action: 'PASSWORD_RESET',
-        payload: { method: 'phone_match' },
-      },
-    });
+    await this.prisma.auditLog
+      .create({
+        data: {
+          userId: user.id,
+          entity: 'User',
+          entityId: user.id,
+          action: 'PASSWORD_RESET',
+          payload: { method: 'phone_match' },
+        },
+      })
+      .catch(() => undefined);
 
     const response: { message: string; provisionalPassword?: string } = {
       message:
