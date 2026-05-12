@@ -98,6 +98,19 @@ npm run test -w backend
 1. Gerar build do frontend: `npm run build -w frontend`.
 2. Gerar build do backend: `npm run build -w backend`.
 3. Subir o backend com `node dist/src/main.js`.
+
+## Produção
+
+- Copie `backend/.env.production.example` para `backend/.env.production` e ajuste os valores reais.
+- Copie `frontend/.env.production.example` para `frontend/.env.production`.
+- Em produção, use `NODE_ENV=production`, `JWT_SECRET` forte e `FRONTEND_URL` apontando para o domínio real.
+- O frontend deve usar `VITE_API_URL=/api` para funcionar via proxy reverso.
+- O Nginx deve redirecionar HTTP para HTTPS e servir `frontend/dist` com proxy para `/api/`.
+- A rota de healthcheck é `GET /api/health`.
+- Execute migrations em produção com `npx prisma migrate deploy --schema backend/prisma/schema.prisma`.
+- Use `scripts/deploy.ps1` para um fluxo de build + migrations + validação de healthcheck no Windows.
+- Valide o backend com `curl -I https://seu-dominio/api/health` ou `Invoke-WebRequest` no Windows.
+
 4. Servir `frontend/dist` via Nginx.
 5. Fazer proxy de `/api/` para `http://127.0.0.1:3001/api/`.
 6. Configurar `FRONTEND_URL`, `DATABASE_URL` e `JWT_SECRET` seguro no ambiente de producao.

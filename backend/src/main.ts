@@ -41,6 +41,19 @@ async function bootstrap() {
       crossOriginResourcePolicy: {
         policy: 'cross-origin',
       },
+      contentSecurityPolicy: nodeEnv === 'production' ? {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https:"],
+        },
+      } : false,
+      hsts: nodeEnv === 'production' ? {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      } : false,
     }),
   );
 

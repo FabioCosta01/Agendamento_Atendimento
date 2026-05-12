@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -7,13 +7,15 @@ import { JwtService } from '../jwt.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
+  private readonly logger = new Logger(JwtAuthGuard.name);
+
   constructor(
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
   ) {}
 
-  async canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -27,41 +29,71 @@ export class JwtAuthGuard implements CanActivate {
     const authHeader: string | undefined = request.headers.authorization;
 
     if (!authHeader?.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Token ausente');
+      this.logger.warn('Tentativa de acesso sem token Bearer');
+      throw new UnauthorizedException('Token de autenticacao ausente ou invalido');
     }
 
     const token = authHeader.replace('Bearer ', '').trim();
-    const tokenUser = this.jwtService.verifyToken(token);
-    const activeUser = await this.prisma.user.findFirst({
-      where: {
-        id: tokenUser.id,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        document: true,
-        role: true,
-        attendanceMunicipalities: {
-          select: {
-            municipality: {
-              select: {
-                id: true,
-                name: true,
-                state: true,
+
+    if (!token) {
+      this.logger.warn('Token Bearer vazio');
+      throw new UnauthorizedException('Token de autenticacao vazio');
+    }
+
+    try {
+      const tokenUser = this.jwtService.verifyToken(token);
+
+      // Validate user exists and is active
+      const activeUser = await this.prisma.user.findFirst({
+        where: {
+          id: tokenUser.id,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          document: true,
+          role: true,
+          attendanceMunicipalities: {
+            select: {
+              municipality: {
+                select: {
+                  id: true,
+                  name: true,
+                  state: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    if (!activeUser) {
-      throw new UnauthorizedException('Usuario inativo ou nao encontrado');
+      if (!activeUser) {
+        this.logger.warn(`Usuario inativo ou nao encontrado: ${tokenUser.id}`);
+        throw new UnauthorizedException('Usuario inativo ou nao encontrado');
+      }
+
+      // Attach user to request object (without sensitive data)
+      request.user = {
+        id: activeUser.id,
+        name: activeUser.name,
+        email: activeUser.email,
+        document: activeUser.document,
+        role: activeUser.role,
+        attendanceMunicipalities: activeUser.attendanceMunicipalities,
+      };
+
+      return true;
+    } catch (error) {
+      // Log security events without exposing sensitive information
+      if (error instanceof UnauthorizedException) {
+        this.logger.warn(`Falha na autenticacao: ${error.message}`);
+      } else {
+        this.logger.error(`Erro inesperado na autenticacao: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      }
+
+      throw error;
     }
-
-    request.user = activeUser;
-    return true;
   }
 }

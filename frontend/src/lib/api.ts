@@ -10,8 +10,8 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? defaultApiUrl,
 });
 
-// Log API base URL on initialization
-if (typeof window !== 'undefined') {
+// Log API base URL on initialization (development only)
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
   console.log('[API] Base URL:', api.defaults.baseURL);
   console.log('[API] Using VITE_API_URL:', !!import.meta.env.VITE_API_URL);
   console.log('[API] Environment:', { isProd: import.meta.env.PROD, isDev: import.meta.env.DEV });
@@ -28,7 +28,6 @@ api.interceptors.response.use(
           baseURL: api.defaults.baseURL,
           message: error.message,
           code: error.code,
-          errno: (error as any).errno,
         });
         if (error.message.includes('ECONNREFUSED')) {
           console.error('[API] Connection refused - Backend may not be running at:', api.defaults.baseURL);

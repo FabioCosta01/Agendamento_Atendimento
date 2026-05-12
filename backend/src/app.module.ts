@@ -1,11 +1,12 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
 import { AgendamentosModule } from './agendamentos/agendamentos.module';
-import { validateEnvironment } from './app.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { SecurityMiddleware } from './common/security.middleware';
+import { validateEnvironment } from './app.config';
 import { DisponibilidadeAgendaModule } from './disponibilidade-agenda/disponibilidade-agenda.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { PontosAtendimentoModule } from './pontos-atendimento/pontos-atendimento.module';
@@ -33,4 +34,8 @@ import { UsuariosModule } from './usuarios/usuarios.module';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(SecurityMiddleware).forRoutes('*');
+  }
+}

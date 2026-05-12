@@ -3,15 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "nest start --watch",
-    "start": "node dist/src/main.js",
+    "dev": "node scripts/validate-jwt.js && nest start --watch",
+    "start": "node scripts/validate-jwt.js && node dist/src/main.js",
     "build": "nest build",
     "test": "tsx --test \"src/**/*.spec.ts\"",
     "format": "prettier --check \"src/**/*.ts\" \"prisma/**/*.prisma\"",
     "lint": "eslint \"src/**/*.ts\"",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "validate-jwt": "node scripts/validate-jwt.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",

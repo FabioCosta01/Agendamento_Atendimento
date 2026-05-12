@@ -31,6 +31,7 @@ import {
   type SessionUser,
   type UserRecord,
 } from './lib/api';
+import { LocalMessagesContainer, useLocalMessages } from './components/LocalMessages';
 
 const emptyData: DashboardPayload = {
   users: [],
@@ -440,12 +441,12 @@ export default function App() {
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [registrationForm, setRegistrationForm] = useState(initialRequesterRegistrationForm);
   const [registrationErrors, setRegistrationErrors] = useState<Partial<Record<keyof typeof initialRequesterRegistrationForm, string>>>({});
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [sessionChecking, setSessionChecking] = useState(true);
   const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
   const [data, setData] = useState<DashboardPayload>(emptyData);
   const [dataError, setDataError] = useState('');
-  const [feedback, setFeedback] = useState('');
+  const localMessages = useLocalMessages();
   const [appointmentForm, setAppointmentForm] = useState(initialAppointmentForm);
   const [propertyForm, setPropertyForm] = useState(initialPropertyForm);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
@@ -455,15 +456,14 @@ export default function App() {
   const [cancelForm, setCancelForm] = useState(initialCancelForm);
   const [selectedProtocol, setSelectedProtocol] = useState<AppointmentRecord | null>(null);
   const [activeAgendaActionId, setActiveAgendaActionId] = useState<string | null>(null);
-  const [whatsAppLink, setWhatsAppLink] = useState('');
   const [userForm, setUserForm] = useState(initialUserForm);
   const [adminUserRoleFilter, setAdminUserRoleFilter] = useState<UserRole | ''>('');
   const [selectedAdminUserId, setSelectedAdminUserId] = useState('');
   const [requesters, setRequesters] = useState<UserRecord[]>([]);
   const [selectedRequesterId, setSelectedRequesterId] = useState('');
   const [requesterProperties, setRequesterProperties] = useState<PropertyRecord[]>([]);
-  const [selectedPropertyMunicipalityId, setSelectedPropertyMunicipalityId] = useState('');
-  const [loadingRequesters, setLoadingRequesters] = useState(false);
+  const [, setSelectedPropertyMunicipalityId] = useState('');
+  const [, setLoadingRequesters] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [serviceForm, setServiceForm] = useState(initialServiceForm);
   const [activeSection, setActiveSection] = useState<SectionKey>(() => {
@@ -876,11 +876,6 @@ export default function App() {
   );
   const activeDayReachedLimit = activeReleasedSlotsCount >= 4;
   const monthlyAvailabilityCount = myAvailability.filter((slot) => slot.startDateTime.slice(0, 7) === agendaMonth).length;
-  const isFeedbackError =
-    feedback.includes('Nao') ||
-    feedback.includes('Ja existe') ||
-    feedback.includes('Selecione') ||
-    feedback.includes('erro');
   const releaseWeekStart = new Date(`${weeklyForm.weekStartDate}T00:00:00`);
   const releaseWeekEnd = addDays(releaseWeekStart, 4);
   const releaseWeekLabel = `${releaseWeekStart.toLocaleDateString('pt-BR', {
@@ -1217,32 +1212,16 @@ export default function App() {
     }));
   }
 
-  function buildWhatsAppLink(appointment: AppointmentRecord) {
-    const phone = appointment.requester?.phone?.replace(/\D/g, '') ?? '';
-    const message = [
-      `Ola, seu atendimento ${appointment.protocolCode} foi reagendado.`,
-      `Nova data: ${formatDate(appointment.scheduledStart ?? appointment.preferredDate)}.`,
-      `Servico: ${appointment.service?.name ?? 'Atendimento'}.`,
-      appointment.justification ? `Justificativa: ${appointment.justification}.` : '',
-      'Empaer-MT - Agendamento de Atendimento',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    return `https://wa.me/${phone ? `55${phone}` : ''}?text=${encodeURIComponent(message)}`;
-  }
-
   function openRescheduleForm(appointment: AppointmentRecord) {
     const slots = getAvailableRescheduleSlots(appointment);
 
     if (slots.length === 0) {
-      setFeedback('Nao ha horario livre para reagendar. Libere um novo horario na agenda.');
+      localMessages.addMessage('error', 'Nao ha horario livre para reagendar. Libere um novo horario na agenda.');
       return;
     }
 
     const firstSlot = slots[0];
     setCancelForm(initialCancelForm);
-    setWhatsAppLink('');
     setActiveSection('atendimentos');
     setRescheduleForm({
       protocolCode: appointment.protocolCode,
@@ -1256,7 +1235,6 @@ export default function App() {
 
   function openCancelForm(appointment: AppointmentRecord) {
     setRescheduleForm(initialRescheduleForm);
-    setWhatsAppLink('');
     setActiveSection('atendimentos');
     setCancelForm({
       protocolCode: appointment.protocolCode,
@@ -1309,7 +1287,7 @@ export default function App() {
         setRequesterProperties([]);
       }
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel carregar os solicitantes.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel carregar os solicitantes.'));
       console.error(error);
     } finally {
       setLoadingRequesters(false);
@@ -1326,7 +1304,7 @@ export default function App() {
       const properties = await fetchProperties(ownerId);
       setRequesterProperties(properties);
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel carregar propriedades do solicitante.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel carregar propriedades do solicitante.'));
       console.error(error);
     }
   }
@@ -1385,6 +1363,10 @@ export default function App() {
     }
 
     window.localStorage.setItem('agendamento_atendimento_section', activeSection);
+  }, [activeSection]);
+
+  useEffect(() => {
+    localMessages.clearMessages();
   }, [activeSection]);
 
   useEffect(() => {
@@ -1586,7 +1568,7 @@ export default function App() {
       setCurrentUser(response.user);
       setRegistrationForm(initialRequesterRegistrationForm);
       setActiveSection('novo');
-      setFeedback('Cadastro criado com sucesso.');
+      localMessages.addMessage('success', 'Cadastro criado com sucesso.');
       await refreshData(response.user.role);
     } catch (error) {
       const backendMessage = getApiErrorMessage(error, 'Nao foi possivel concluir o cadastro.');
@@ -1611,7 +1593,6 @@ export default function App() {
     setCurrentUser(null);
     setAuthToken(null);
     setData(emptyData);
-    setFeedback('');
     setActiveSection('novo');
   }
 
@@ -1632,13 +1613,13 @@ export default function App() {
         notes: appointmentForm.notes,
       });
 
-      setFeedback(`Protocolo gerado: ${appointment.protocolCode}`);
+      localMessages.addMessage('success', `Protocolo gerado: ${appointment.protocolCode}`);
       setAppointmentForm((current) => ({ ...current, availabilityId: '', preferredDate: '', notes: '' }));
       setSelectedRequesterMunicipalityId('');
       setRequesterStep('property');
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel gerar o protocolo.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel gerar o protocolo.'));
       console.error(error);
     }
   }
@@ -1651,14 +1632,14 @@ export default function App() {
     }
 
     if (isRequester) {
-      setFeedback('Solicitante nao pode cadastrar propriedades.');
+      localMessages.addMessage('error', 'Solicitante nao pode cadastrar propriedades.');
       return;
     }
 
     const owner = isExtensionist && activeSection === 'propriedades' ? selectedRequester : currentUser;
 
     if (!owner) {
-      setFeedback('Selecione um solicitante antes de cadastrar propriedade.');
+      localMessages.addMessage('error', 'Selecione um solicitante antes de cadastrar propriedade.');
       return;
     }
 
@@ -1674,7 +1655,7 @@ export default function App() {
           hasHabiteSe: propertyForm.hasHabiteSe,
         });
 
-        setFeedback('Propriedade atualizada.');
+        localMessages.addMessage('success', 'Propriedade atualizada.');
       } else {
         await createProperty({
           ownerId: owner.id,
@@ -1683,7 +1664,7 @@ export default function App() {
           ...propertyForm,
         });
 
-        setFeedback('Propriedade cadastrada.');
+        localMessages.addMessage('success', 'Propriedade cadastrada.');
       }
 
       setPropertyForm(initialPropertyForm);
@@ -1696,14 +1677,14 @@ export default function App() {
         await loadRequesterProperties(selectedRequesterId);
       }
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, editingPropertyId ? 'Nao foi possivel atualizar a propriedade.' : 'Nao foi possivel cadastrar a propriedade.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, editingPropertyId ? 'Nao foi possivel atualizar a propriedade.' : 'Nao foi possivel cadastrar a propriedade.'));
       console.error(error);
     }
   }
 
   function handleEditProperty(property: PropertyRecord) {
     if (!isExtensionist) {
-      setFeedback('Apenas extensionista pode editar propriedades.');
+      localMessages.addMessage('error', 'Apenas extensionista pode editar propriedades.');
       return;
     }
 
@@ -1726,7 +1707,7 @@ export default function App() {
 
   async function handleDeleteProperty(propertyId: string) {
     if (!currentUser || !isExtensionist) {
-      setFeedback('Apenas extensionista pode remover propriedades.');
+      localMessages.addMessage('error', 'Apenas extensionista pode remover propriedades.');
       return;
     }
 
@@ -1736,7 +1717,7 @@ export default function App() {
 
     try {
       await deleteProperty(propertyId);
-      setFeedback('Propriedade removida com sucesso.');
+      localMessages.addMessage('success', 'Propriedade removida com sucesso.');
 
       if (selectedRequesterId) {
         await loadRequesterProperties(selectedRequesterId);
@@ -1744,7 +1725,7 @@ export default function App() {
 
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel remover propriedade.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel remover propriedade.'));
       console.error(error);
     }
   }
@@ -1760,12 +1741,12 @@ export default function App() {
       const targetExtensionistId = isAdmin ? selectedAgendaExtensionistId : currentUser.id;
 
       if (!targetExtensionistId) {
-        setFeedback('Selecione um extensionista para gerenciar a agenda.');
+        localMessages.addMessage('error', 'Selecione um extensionista para gerenciar a agenda.');
         return;
       }
 
       if (!selectedAgendaMunicipalityId) {
-        setFeedback('Selecione um municipio de atendimento para liberar a agenda.');
+        localMessages.addMessage('error', 'Selecione um municipio de atendimento para liberar a agenda.');
         return;
       }
 
@@ -1774,12 +1755,12 @@ export default function App() {
         : [];
 
       if (activeDayReachedLimit) {
-        setFeedback('Ja existe horario liberado para esse Extensionista');
+        localMessages.addMessage('error', 'Ja existe horario liberado para esse Extensionista');
         return;
       }
 
       if (selectedWeekdays.length === 0) {
-        setFeedback('Selecione pelo menos um dia util sem feriado.');
+        localMessages.addMessage('error', 'Selecione pelo menos um dia util sem feriado.');
         return;
       }
 
@@ -1821,7 +1802,7 @@ export default function App() {
         .filter((item) => item.timeBlocks.length > 0);
 
       if (requests.length === 0) {
-        setFeedback('Selecione pelo menos uma vaga de manha ou tarde.');
+        localMessages.addMessage('error', 'Selecione pelo menos uma vaga de manha ou tarde.');
         return;
       }
 
@@ -1851,10 +1832,10 @@ export default function App() {
         ...current,
         weekdays: [activeWeeklyWeekday],
       }));
-      setFeedback(`Agenda gerada com ${generatedCount} vaga(s) para ${generatedDates}.`);
+      localMessages.addMessage('success', `Agenda gerada com ${generatedCount} vaga(s) para ${generatedDates}.`);
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel gerar a semana.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel gerar a semana.'));
       console.error(error);
     }
   }
@@ -1882,10 +1863,10 @@ export default function App() {
       onConfirm: async () => {
         try {
           await deleteAvailability(id);
-          setFeedback('Horario excluido.');
+          localMessages.addMessage('success', 'Horario excluido.');
           await refreshData();
         } catch (error) {
-          setFeedback(
+          localMessages.addMessage('error',
             getApiErrorMessage(
               error,
               'Nao foi possivel excluir. Horarios com atendimento no historico ficam bloqueados.',
@@ -1907,7 +1888,7 @@ export default function App() {
         appointment.availability?.extensionistId ?? appointment.extensionistId ?? (isExtensionist ? currentUser.id : '');
 
       if (!targetExtensionistId) {
-        setFeedback('Nao foi possivel identificar o extensionista do atendimento.');
+        localMessages.addMessage('error', 'Nao foi possivel identificar o extensionista do atendimento.');
         return;
       }
 
@@ -1916,10 +1897,10 @@ export default function App() {
         extensionistId: targetExtensionistId,
       });
 
-      setFeedback(`Protocolo ${appointment.protocolCode} aprovado.`);
+      localMessages.addMessage('success', `Protocolo ${appointment.protocolCode} aprovado.`);
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel aprovar o atendimento.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel aprovar o atendimento.'));
       console.error(error);
     }
   }
@@ -1930,11 +1911,11 @@ export default function App() {
         status: AppointmentStatus.CONCLUIDO,
       });
 
-      setFeedback(`Protocolo ${appointment.protocolCode} concluido.`);
+      localMessages.addMessage('success', `Protocolo ${appointment.protocolCode} concluido.`);
       setSelectedProtocol(null);
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel concluir o atendimento.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel concluir o atendimento.'));
       console.error(error);
     }
   }
@@ -1954,22 +1935,22 @@ export default function App() {
             justification: cancelForm.justification,
           });
 
-          setFeedback(`Protocolo ${cancelForm.protocolCode} cancelado.`);
+          localMessages.addMessage('success', `Protocolo ${cancelForm.protocolCode} cancelado.`);
           setCancelForm(initialCancelForm);
           await refreshData();
         } catch (error) {
-          setFeedback(getApiErrorMessage(error, 'Nao foi possivel cancelar o atendimento.'));
+          localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel cancelar o atendimento.'));
           console.error(error);
         }
       },
     });
   }
 
-  function handlePrintProtocol(appointment: AppointmentRecord) {
+  function handlePrintProtocol(protocol: AppointmentRecord) {
     const printWindow = window.open('', '_blank', 'width=720,height=640');
 
     if (!printWindow) {
-      setFeedback('Nao foi possivel abrir a janela de impressao.');
+      localMessages.addMessage('error', 'Nao foi possivel abrir a janela de impressao.');
       return;
     }
 
@@ -2256,12 +2237,11 @@ export default function App() {
         justification: rescheduleForm.justification,
       });
 
-      setFeedback(`Protocolo ${rescheduleForm.protocolCode} reagendado.`);
-      setWhatsAppLink(buildWhatsAppLink(appointment));
+      localMessages.addMessage('success', `Protocolo ${rescheduleForm.protocolCode} reagendado.`);
       setRescheduleForm(initialRescheduleForm);
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel reagendar o atendimento.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel reagendar o atendimento.'));
       console.error(error);
     }
   }
@@ -2271,7 +2251,7 @@ export default function App() {
       await markNotificationAsRead(id);
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel marcar a notificacao como lida.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel marcar a notificacao como lida.'));
       console.error(error);
     }
   }
@@ -2281,11 +2261,11 @@ export default function App() {
 
     try {
       await createUser(userForm);
-      setFeedback('Usuario cadastrado.');
+      localMessages.addMessage('success', 'Usuario cadastrado.');
       setUserForm(initialUserForm);
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel cadastrar o usuario.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel cadastrar o usuario.'));
       console.error(error);
     }
   }
@@ -2295,11 +2275,11 @@ export default function App() {
 
     try {
       await createService(serviceForm);
-      setFeedback('Servico cadastrado.');
+      localMessages.addMessage('success', 'Servico cadastrado.');
       setServiceForm(initialServiceForm);
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel cadastrar o servico.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel cadastrar o servico.'));
       console.error(error);
     }
   }
@@ -2313,10 +2293,10 @@ export default function App() {
       onConfirm: async () => {
         try {
           await updateUser(userId, { isActive: !isActive });
-          setFeedback(isActive ? 'Usuario desativado.' : 'Usuario ativado.');
+          localMessages.addMessage('success', isActive ? 'Usuario desativado.' : 'Usuario ativado.');
           await refreshData();
         } catch (error) {
-          setFeedback(getApiErrorMessage(error, 'Nao foi possivel alterar o usuario.'));
+          localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel alterar o usuario.'));
           console.error(error);
         }
       },
@@ -2326,14 +2306,14 @@ export default function App() {
   async function handleUpdateExtensionistMunicipalities(userId: string, attendanceMunicipalityIds: string[]) {
     try {
       await updateUser(userId, { attendanceMunicipalityIds });
-      setFeedback(
+      localMessages.addMessage('success',
         attendanceMunicipalityIds.length > 0
           ? 'Municipios de atendimento atualizados.'
           : 'Municipios de atendimento removidos.',
       );
       await refreshData();
     } catch (error) {
-      setFeedback(getApiErrorMessage(error, 'Nao foi possivel alterar os municipios de atendimento.'));
+      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel alterar os municipios de atendimento.'));
       console.error(error);
     }
   }
@@ -2347,10 +2327,10 @@ export default function App() {
       onConfirm: async () => {
         try {
           await updateService(serviceId, { active: !active });
-          setFeedback(active ? 'Servico desativado.' : 'Servico ativado.');
+          localMessages.addMessage('success', active ? 'Servico desativado.' : 'Servico ativado.');
           await refreshData();
         } catch (error) {
-          setFeedback(getApiErrorMessage(error, 'Nao foi possivel alterar o servico.'));
+          localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel alterar o servico.'));
           console.error(error);
         }
       },
@@ -2472,7 +2452,14 @@ export default function App() {
                   onChange={(event) => {
                     const value = event.target.value.replace(/\D/g, '').slice(0, 11);
                     setRegistrationForm((current) => ({ ...current, document: value }));
-                    setRegistrationErrors((current) => ({ ...current, document: undefined }));
+                    
+                    if (value.length === 11 && !isValidCpf(value)) {
+                      setRegistrationErrors((current) => ({ ...current, document: 'CPF inválido' }));
+                    } else if (value.length < 11) {
+                      setRegistrationErrors((current) => ({ ...current, document: undefined }));
+                    } else if (isValidCpf(value)) {
+                      setRegistrationErrors((current) => ({ ...current, document: undefined }));
+                    }
                   }}
                 />
                 {registrationErrors.document ? (
@@ -2587,18 +2574,6 @@ export default function App() {
         </div>
       </header>
 
-      {loading ? <p className="alert">Carregando dados...</p> : null}
-      {dataError ? <p className="alert error">{dataError}</p> : null}
-      {feedback ? <p className={isFeedbackError ? 'alert error' : 'alert success'}>{feedback}</p> : null}
-      {whatsAppLink ? (
-        <p className="alert success">
-          Solicitante notificado no sistema.{' '}
-          <a href={whatsAppLink} target="_blank" rel="noreferrer">
-            Enviar mensagem pelo WhatsApp
-          </a>
-        </p>
-      ) : null}
-
       {!isRequester ? (
         <section className="summary-grid">
           <article>
@@ -2643,6 +2618,9 @@ export default function App() {
             </div>
             <strong>{data.notifications.filter((notification) => !notification.readAt).length} nova(s)</strong>
           </div>
+
+          <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
           <div className="record-list compact">
             {data.notifications.slice(0, 8).map((notification) => (
               <article
@@ -2686,6 +2664,8 @@ export default function App() {
               </div>
               <strong>{availableSlots.length} disponivel(is)</strong>
             </div>
+
+            <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
 
             <div className="flow-steps easy-steps" aria-label="Etapas para gerar protocolo">
               <article className={requesterStep !== 'property' && selectedProperty ? 'flow-step complete' : 'flow-step'}>
@@ -3018,6 +2998,8 @@ export default function App() {
               <strong>{openAppointments.length}</strong>
             </div>
 
+            <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
             {isAdmin ? (
               <>
                 <div className="admin-agenda-manager">
@@ -3287,6 +3269,9 @@ export default function App() {
                   Fechar
                 </button>
               </div>
+
+              <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
               <dl>
                 <div>
                   <dt>Status</dt>
@@ -3372,6 +3357,8 @@ export default function App() {
                   </div>
                   <strong>{adminProtocolAppointments.length}</strong>
                 </div>
+
+                <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
 
                 <div className="admin-protocol-toolbar">
                   <div>
@@ -3542,6 +3529,9 @@ export default function App() {
                     <h2>Solicitantes</h2>
                   </div>
                 </div>
+
+                <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
                 <div className="form-row">
                   <label>
                     Produtor solicitante
@@ -4184,6 +4174,8 @@ export default function App() {
                       <p className="empty">Escolha pelo menos um dia util para liberar a agenda.</p>
                     )}
 
+                    <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
                     <button
                       type="submit"
                       className="release-submit"
@@ -4291,6 +4283,9 @@ export default function App() {
                   <h2>{rescheduleForm.protocolCode}</h2>
                 </div>
               </div>
+
+              <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
               <form className="compact-form" onSubmit={handleRescheduleAppointment}>
                 <label>
                   Nova data
@@ -4363,6 +4358,9 @@ export default function App() {
                   <h2>{cancelForm.protocolCode}</h2>
                 </div>
               </div>
+
+              <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
               <form className="compact-form" onSubmit={handleCancelAppointment}>
                 <label>
                   Justificativa
@@ -4396,6 +4394,9 @@ export default function App() {
                 <h2>Novo usuario</h2>
               </div>
             </div>
+
+            <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
             <form className="compact-form admin-form" onSubmit={handleCreateUser}>
               <input placeholder="Nome" value={userForm.name} onChange={(event) => setUserForm((current) => ({ ...current, name: event.target.value }))} />
               <input placeholder="E-mail" value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} />
@@ -4434,6 +4435,9 @@ export default function App() {
                 <h2>Perfis e locais</h2>
               </div>
             </div>
+
+            <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
             <div className="admin-user-filter">
               <div>
                 <span>Filtro de perfil</span>
@@ -4562,6 +4566,9 @@ export default function App() {
                 <h2>Novo servico</h2>
               </div>
             </div>
+
+            <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
             <form className="compact-form admin-form" onSubmit={handleCreateService}>
               <select
                 value={serviceForm.classification}
@@ -4604,6 +4611,9 @@ export default function App() {
               </div>
               <strong>{adminFilteredServices.length}</strong>
             </div>
+
+            <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
+
             <div className="service-filter-panel">
               <label>
                 Assunto
