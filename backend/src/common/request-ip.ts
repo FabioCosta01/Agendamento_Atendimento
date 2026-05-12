@@ -1,6 +1,10 @@
 import type { Request } from 'express';
 
-export function getClientIp(req: Request): string {
+export function getClientIp(req: Request, trustProxy = false): string {
+  if (!trustProxy) {
+    return req.socket.remoteAddress ?? req.ip ?? 'unknown';
+  }
+
   const forwarded = req.headers['x-forwarded-for'];
   const realIp = req.headers['x-real-ip'];
 

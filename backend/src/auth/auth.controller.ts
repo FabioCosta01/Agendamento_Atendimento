@@ -1,4 +1,5 @@
 import { Body, Controller, Post, Req } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 
 import { getClientIp } from '../common/request-ip';
@@ -14,7 +15,10 @@ import { TrocarSenhaObrigatoriaDto } from './dto/trocar-senha-obrigatoria.dto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Public()
   @Post('login')
@@ -25,7 +29,8 @@ export class AuthController {
   @Public()
   @Post('recuperar-senha')
   recuperarSenha(@Body() dto: RecuperarSenhaDto, @Req() req: Request) {
-    return this.authService.recoverPassword(dto.document, dto.phone, getClientIp(req));
+    const trustProxy = this.configService.get<string>('TRUST_PROXY', 'false') === 'true';
+    return this.authService.recoverPassword(dto.document, dto.phone, getClientIp(req, trustProxy));
   }
 
   @AllowPendingPasswordFlow()

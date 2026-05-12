@@ -5,12 +5,12 @@ import { JwtService } from './jwt.service';
 
 test('JwtService assina e valida token', () => {
   const configService = {
-    get(key: string) {
+    get(key: string, defaultValue?: string) {
       if (key === 'JWT_SECRET') {
-        return 'segredo-super-seguro';
+        return 'segredo-super-seguro-com-mais-de-32-caracteres';
       }
 
-      return undefined;
+      return defaultValue;
     },
   } as const;
 

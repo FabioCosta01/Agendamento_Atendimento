@@ -5,6 +5,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { UserRole } from 'shared';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -22,6 +23,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
   async login(loginDto: LoginDto) {
@@ -135,11 +137,18 @@ export class AuthService {
       },
     });
 
-    return {
+    const response: { message: string; provisionalPassword?: string } = {
       message:
-        'Senha provisoria gerada. Anote-a com seguranca. No proximo acesso sera obrigatorio definir uma nova senha.',
-      provisionalPassword: provisional,
+        this.configService.get<string>('NODE_ENV', 'development') === 'production'
+          ? 'Senha provisoria gerada. Procure o canal oficial de atendimento para recebe-la com seguranca.'
+          : 'Senha provisoria gerada. Anote-a com seguranca. No proximo acesso sera obrigatorio definir uma nova senha.',
     };
+
+    if (this.configService.get<string>('NODE_ENV', 'development') !== 'production') {
+      response.provisionalPassword = provisional;
+    }
+
+    return response;
   }
 
   async completeMandatoryPasswordChange(userId: string, newPassword: string) {

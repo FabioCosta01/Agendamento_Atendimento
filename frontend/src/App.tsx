@@ -407,6 +407,7 @@ export default function App() {
   const [recoverPhone, setRecoverPhone] = useState('');
   const [recoverSubmitting, setRecoverSubmitting] = useState(false);
   const [recoverError, setRecoverError] = useState('');
+  const [recoverMessage, setRecoverMessage] = useState('');
   const [recoverProvisionalPassword, setRecoverProvisionalPassword] = useState<string | null>(null);
   const [mandatoryNewPassword, setMandatoryNewPassword] = useState('');
   const [mandatoryConfirmPassword, setMandatoryConfirmPassword] = useState('');
@@ -1595,6 +1596,7 @@ export default function App() {
   async function handleRecoverPasswordSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setRecoverError('');
+    setRecoverMessage('');
     setRecoverProvisionalPassword(null);
 
     const cleanDoc = recoverDocument.replace(/\D/g, '');
@@ -1613,7 +1615,11 @@ export default function App() {
 
     try {
       const result = await recoverPassword({ document: cleanDoc, phone: phoneDigits });
-      setRecoverProvisionalPassword(result.provisionalPassword);
+      if (result.provisionalPassword) {
+        setRecoverProvisionalPassword(result.provisionalPassword);
+        return;
+      }
+      setRecoverMessage(result.message);
     } catch (error) {
       setRecoverError(getApiErrorMessage(error, 'Não foi possível concluir a recuperação.'));
       console.error(error);
@@ -1628,6 +1634,7 @@ export default function App() {
     setRecoverDocumentCpfError('');
     setRecoverPhone('');
     setRecoverError('');
+    setRecoverMessage('');
     setRecoverProvisionalPassword(null);
   }
 
@@ -2614,6 +2621,7 @@ export default function App() {
                     setRecoverDocumentCpfError('');
                     setRecoverPhone('');
                     setRecoverError('');
+                    setRecoverMessage('');
                     setRecoverProvisionalPassword(null);
                   }}
                 >
@@ -2770,6 +2778,15 @@ export default function App() {
                   </button>
                 </div>
               </>
+            ) : recoverMessage ? (
+              <>
+                <p>{recoverMessage}</p>
+                <div className="confirm-actions recover-dialog-actions">
+                  <button type="button" className="secondary" onClick={closeRecoverModal}>
+                    Fechar
+                  </button>
+                </div>
+              </>
             ) : (
               <form className="compact-form recover-form" onSubmit={handleRecoverPasswordSubmit}>
                 <p>Informe o CPF e o telefone cadastrados na sua conta. Se os dados conferirem, uma senha provisória será gerada.</p>
@@ -2843,27 +2860,6 @@ export default function App() {
           </button>
         </div>
       </header>
-
-      {!isRequester ? (
-        <section className="summary-grid">
-          <article>
-            <span>Protocolos</span>
-            <strong>{visibleAppointments.length}</strong>
-          </article>
-          <article>
-            <span>Pendentes</span>
-            <strong>{openAppointments.length}</strong>
-          </article>
-          <article>
-            <span>Aprovados</span>
-            <strong>{approvedAppointments.length}</strong>
-          </article>
-          <article>
-            <span>Agenda</span>
-            <strong>{monthlyAvailabilityCount}</strong>
-          </article>
-        </section>
-      ) : null}
 
       <nav className="top-menu" aria-label="Menu principal">
         {menuItems.map((item) => (

@@ -270,8 +270,19 @@ export class UsuariosService {
       throw new BadRequestException('Documento deve ter pelo menos 11 digitos');
     }
 
-    if (payload.password && payload.password === '123456') {
-      throw new BadRequestException('Use uma senha diferente da senha padrao');
+    const password = payload.password?.trim();
+    if (password !== undefined) {
+      if (password.length < 8) {
+        throw new BadRequestException('Senha deve ter pelo menos 8 caracteres');
+      }
+
+      if (document && password.replace(/\D/g, '') === document) {
+        throw new BadRequestException('Use uma senha diferente do CPF');
+      }
+
+      if (['123456', '12345678'].includes(password)) {
+        throw new BadRequestException('Use uma senha diferente de senhas comuns');
+      }
     }
 
     return {
@@ -279,6 +290,7 @@ export class UsuariosService {
       name,
       email: payload.email?.trim().toLowerCase(),
       document,
+      password,
       phone: payload.phone?.replace(/\D/g, ''),
       attendanceMunicipalityIds: payload.attendanceMunicipalityIds?.map((id) => id.trim()).filter(Boolean),
     };

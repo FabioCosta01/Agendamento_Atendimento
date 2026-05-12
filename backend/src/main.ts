@@ -14,6 +14,7 @@ async function bootstrap() {
   const port = configService.get<number>('PORT', 3001);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
   const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
+  const trustProxy = configService.get<string>('TRUST_PROXY', 'false') === 'true';
   const allowedOrigins =
     nodeEnv === 'production'
       ? [frontendUrl].filter((origin): origin is string => Boolean(origin))
@@ -68,6 +69,10 @@ async function bootstrap() {
     },
     credentials: true,
   });
+
+  if (trustProxy) {
+    app.getHttpAdapter().getInstance().set('trust proxy', true);
+  }
 
   app.setGlobalPrefix('api');
   app.useGlobalFilters(new HttpExceptionFilter());

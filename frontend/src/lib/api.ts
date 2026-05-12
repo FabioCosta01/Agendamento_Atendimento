@@ -242,7 +242,7 @@ export async function login(document: string, password: string) {
 }
 
 export async function recoverPassword(payload: { document: string; phone: string }) {
-  const response = await api.post<{ message: string; provisionalPassword: string }>('/auth/recuperar-senha', {
+  const response = await api.post<{ message: string; provisionalPassword?: string }>('/auth/recuperar-senha', {
     document: payload.document.replace(/\D/g, ''),
     phone: payload.phone.replace(/\D/g, ''),
   });

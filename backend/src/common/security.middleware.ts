@@ -13,11 +13,13 @@ export class SecurityMiddleware implements NestMiddleware {
   private readonly rateLimitStore = new Map<string, RateLimitEntry>();
   private readonly maxRequests: number;
   private readonly windowMs: number;
+  private readonly trustProxy: boolean;
 
   constructor(private readonly configService: ConfigService) {
     const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
     this.maxRequests = nodeEnv === 'production' ? 100 : 1000; // More restrictive in production
     this.windowMs = 15 * 60 * 1000; // 15 minutes
+    this.trustProxy = this.configService.get<string>('TRUST_PROXY', 'false') === 'true';
   }
 
   use(req: Request, res: Response, next: NextFunction): void {
@@ -50,6 +52,10 @@ export class SecurityMiddleware implements NestMiddleware {
   }
 
   private getClientIP(req: Request): string {
+    if (!this.trustProxy) {
+      return req.socket.remoteAddress ?? req.ip ?? 'unknown';
+    }
+
     const forwarded = req.headers['x-forwarded-for'] as string;
     const realIP = req.headers['x-real-ip'] as string;
     const clientIP = req.headers['x-client-ip'] as string;

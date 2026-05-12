@@ -16,7 +16,7 @@ export class AtualizarUsuarioDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   password?: string;
 
   @IsOptional()
