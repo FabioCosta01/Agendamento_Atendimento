@@ -2,7 +2,7 @@
 
 Sistema web para agendamento, acompanhamento e administracao de atendimentos tecnicos da Empaer-MT, com perfis separados para solicitante, extensionista e administrador.
 
-## Stack
+## Stackk
 
 - Monorepo NPM Workspaces: `backend`, `frontend`, `shared`
 - Backend: NestJS 11, TypeScript, Prisma 6, MySQL/MariaDB, JWT e Helmet
