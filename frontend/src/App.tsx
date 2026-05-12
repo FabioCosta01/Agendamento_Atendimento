@@ -719,10 +719,11 @@ export default function App() {
         (appointment) =>
           appointment.availabilityId === availabilityId &&
           [
-            AppointmentStatus.SOLICITADO,
-            AppointmentStatus.APROVADO,
-            AppointmentStatus.REAGENDADO,
-          ].includes(appointment.status),
+          AppointmentStatus.SOLICITADO,
+          AppointmentStatus.APROVADO,
+          AppointmentStatus.REAGENDADO,
+          AppointmentStatus.CONCLUIDO,
+        ].includes(appointment.status),
       ),
     [visibleAppointments],
   );
@@ -3372,21 +3373,20 @@ export default function App() {
 
             {!isAdmin && managedAgendaMunicipalities.length > 0 ? (
               <div className="municipality-context-bar">
-                <div>
+                <label className="municipality-context-field">
                   <span>Municipio de atendimento</span>
-                  <strong>{selectedAgendaMunicipality?.name ?? 'Selecione um municipio'}</strong>
-                  <small>Atendimentos e acoes exibidos conforme o municipio selecionado.</small>
-                </div>
-                <select
-                  value={selectedAgendaMunicipalityId}
-                  onChange={(event) => setSelectedAgendaMunicipalityId(event.target.value)}
-                >
-                  {managedAgendaMunicipalities.map((municipality) => (
-                    <option key={municipality.id} value={municipality.id}>
-                      {municipality.name}/{municipality.state}
-                    </option>
-                  ))}
-                </select>
+                  <select
+                    value={selectedAgendaMunicipalityId}
+                    onChange={(event) => setSelectedAgendaMunicipalityId(event.target.value)}
+                  >
+                    {managedAgendaMunicipalities.map((municipality) => (
+                      <option key={municipality.id} value={municipality.id}>
+                        {municipality.name}/{municipality.state}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <small>Atendimentos e acoes exibidos conforme o municipio selecionado.</small>
               </div>
             ) : null}
 
@@ -3397,17 +3397,17 @@ export default function App() {
             {hasAgendaContext ? (
             <>
             <div className="operator-board">
-              <article>
+              <article className="operator-card-waiting">
                 <span>Aguardando acao</span>
                 <strong>{openAppointments.length}</strong>
                 <small>Solicitacoes novas para aprovar</small>
               </article>
-              <article>
+              <article className="operator-card-active">
                 <span>Em atendimento</span>
                 <strong>{approvedAppointments.length}</strong>
                 <small>Protocolos aprovados para concluir</small>
               </article>
-              <article>
+              <article className="operator-card-future">
                 <span>Vagas futuras</span>
                 <strong>{upcomingAvailability.length}</strong>
                 <small>Horarios liberados em dias permitidos</small>
@@ -3695,15 +3695,15 @@ export default function App() {
                 </div>
 
                 <div className="admin-protocol-metrics">
-                  <article>
+                  <article className="protocol-card-waiting">
                     <span>Aguardando</span>
                     <strong>{adminProtocolOpenCount}</strong>
                   </article>
-                  <article>
+                  <article className="protocol-card-active">
                     <span>Em andamento</span>
                     <strong>{adminProtocolActiveCount}</strong>
                   </article>
-                  <article>
+                  <article className="protocol-card-done">
                     <span>Concluidos</span>
                     <strong>{adminProtocolDoneCount}</strong>
                   </article>
@@ -4057,20 +4057,19 @@ export default function App() {
 
               {!isAdmin && managedAgendaMunicipalities.length > 0 ? (
                 <div className="municipality-context-bar">
-                  <div>
+                  <label className="municipality-context-field">
                     <span>Municipio de atendimento</span>
-                    <strong>{selectedAgendaMunicipality?.name ?? 'Selecione um municipio'}</strong>
-                  </div>
-                  <select
-                    value={selectedAgendaMunicipalityId}
-                    onChange={(event) => setSelectedAgendaMunicipalityId(event.target.value)}
-                  >
-                    {managedAgendaMunicipalities.map((municipality) => (
-                      <option key={municipality.id} value={municipality.id}>
-                        {municipality.name}/{municipality.state}
-                      </option>
-                    ))}
-                  </select>
+                    <select
+                      value={selectedAgendaMunicipalityId}
+                      onChange={(event) => setSelectedAgendaMunicipalityId(event.target.value)}
+                    >
+                      {managedAgendaMunicipalities.map((municipality) => (
+                        <option key={municipality.id} value={municipality.id}>
+                          {municipality.name}/{municipality.state}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               ) : null}
 

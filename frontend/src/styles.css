@@ -1235,6 +1235,57 @@ button.login-text-action:hover {
   margin-top: 6px;
 }
 
+.operator-board article {
+  position: relative;
+  overflow: hidden;
+}
+
+.operator-board article::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+}
+
+.operator-card-waiting {
+  border-color: rgba(180, 83, 9, 0.22);
+  background: linear-gradient(180deg, #fffaf2, #f8fbff);
+}
+
+.operator-card-waiting::before {
+  background: #c6862b;
+}
+
+.operator-card-waiting strong {
+  color: #8a520f;
+}
+
+.operator-card-active {
+  border-color: rgba(31, 94, 168, 0.22);
+  background: linear-gradient(180deg, #f4f9ff, #f8fbff);
+}
+
+.operator-card-active::before {
+  background: var(--blue);
+}
+
+.operator-card-active strong {
+  color: var(--blue-dark);
+}
+
+.operator-card-future {
+  border-color: rgba(15, 118, 110, 0.22);
+  background: linear-gradient(180deg, #f1fbf9, #f8fbff);
+}
+
+.operator-card-future::before {
+  background: #0f766e;
+}
+
+.operator-card-future strong {
+  color: #0f766e;
+}
+
 .appointment-queue .record:first-child {
   border-color: rgba(31, 94, 168, 0.24);
   background: linear-gradient(180deg, #ffffff, #f1f7fe);
@@ -1400,9 +1451,9 @@ button.login-text-action:hover {
 
 .municipality-context-bar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
-  align-items: center;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 7px;
   border: 1px solid rgba(31, 94, 168, 0.16);
   border-radius: 14px;
   background: linear-gradient(180deg, #ffffff, #f7fbff);
@@ -1410,7 +1461,14 @@ button.login-text-action:hover {
   padding: 12px 14px;
 }
 
-.municipality-context-bar span {
+.municipality-context-field {
+  display: grid;
+  gap: 7px;
+  justify-items: start;
+}
+
+.municipality-context-bar span,
+.municipality-context-field span {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 850;
@@ -1433,8 +1491,10 @@ button.login-text-action:hover {
   margin-top: 2px;
 }
 
-.municipality-context-bar select {
+.municipality-context-field select {
+  width: min(100%, 320px);
   min-height: 42px;
+  background: #ffffff;
 }
 
 .admin-user-filter {
@@ -3228,10 +3288,19 @@ button.danger-action {
 }
 
 .admin-protocol-metrics article {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 13px;
   background: #ffffff;
   padding: 12px;
+}
+
+.admin-protocol-metrics article::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
 }
 
 .admin-protocol-metrics strong {
@@ -3240,6 +3309,45 @@ button.danger-action {
   font-size: 1.5rem;
   line-height: 1;
   margin-top: 7px;
+}
+
+.protocol-card-waiting {
+  border-color: rgba(180, 83, 9, 0.22);
+  background: linear-gradient(180deg, #fffaf2, #f8fbff);
+}
+
+.protocol-card-waiting::before {
+  background: #c6862b;
+}
+
+.protocol-card-waiting strong {
+  color: #8a520f;
+}
+
+.protocol-card-active {
+  border-color: rgba(31, 94, 168, 0.22);
+  background: linear-gradient(180deg, #f4f9ff, #f8fbff);
+}
+
+.protocol-card-active::before {
+  background: var(--blue);
+}
+
+.protocol-card-active strong {
+  color: var(--blue-dark);
+}
+
+.protocol-card-done {
+  border-color: rgba(15, 118, 110, 0.22);
+  background: linear-gradient(180deg, #f1fbf9, #f8fbff);
+}
+
+.protocol-card-done::before {
+  background: #0f766e;
+}
+
+.protocol-card-done strong {
+  color: #0f766e;
 }
 
 .admin-protocol-list {

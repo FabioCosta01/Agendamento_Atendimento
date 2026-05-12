@@ -396,7 +396,11 @@ export class DisponibilidadeAgendaService {
 
     this.ensureCanManageExtensionist(availability.extensionistId, user);
 
-    if (availability.appointments.length > 0) {
+    const hasBlockingAppointment = availability.appointments.some((appointment) =>
+      ['SOLICITADO', 'APROVADO', 'REAGENDADO', 'CONCLUIDO'].includes(appointment.status),
+    );
+
+    if (hasBlockingAppointment) {
       throw new BadRequestException('Horario com historico de atendimento nao pode ser excluido');
     }
 
