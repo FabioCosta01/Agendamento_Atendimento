@@ -11,6 +11,7 @@
     "test": "tsx --test \"src/**/*.spec.ts\"",
     "format": "prettier --check \"src/**/*.ts\" \"prisma/**/*.prisma\"",
     "lint": "eslint \"src/**/*.ts\"",
+    "db:validate": "tsx scripts/validate-db.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts",

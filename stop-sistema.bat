@@ -12,6 +12,7 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":3001" ^| findstr "LISTENING
   set "FOUND_BACKEND=1"
   echo Encerrando backend: PID %%P
   taskkill /F /PID %%P >nul 2>nul
+  if errorlevel 1 echo Aviso: nao foi possivel encerrar o PID %%P.
 )
 
 if not defined FOUND_BACKEND (
@@ -25,6 +26,7 @@ for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":5173" ^| findstr "LISTENING
   set "FOUND_FRONTEND=1"
   echo Encerrando frontend: PID %%P
   taskkill /F /PID %%P >nul 2>nul
+  if errorlevel 1 echo Aviso: nao foi possivel encerrar o PID %%P.
 )
 
 if not defined FOUND_FRONTEND (

@@ -27,6 +27,9 @@ Thumbs.db
 # Coverage
 coverage/
 
+# Local backups
+backups/
+
 # Uploads
 backend/uploads/
 

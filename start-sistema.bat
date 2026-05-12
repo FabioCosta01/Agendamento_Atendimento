@@ -25,6 +25,11 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo Versoes detectadas:
+node -v
+npm -v
+echo.
+
 if not exist "%ROOT_DIR%node_modules" (
   echo Dependencias nao encontradas. Executando npm install...
   call npm install
@@ -58,11 +63,13 @@ echo Liberando portas antigas, se necessario...
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":3001" ^| findstr "LISTENING"') do (
   echo Encerrando processo antigo na porta 3001: %%P
   taskkill /F /PID %%P >nul 2>nul
+  if errorlevel 1 echo Aviso: nao foi possivel encerrar o PID %%P. Verifique manualmente.
 )
 
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr ":5173" ^| findstr "LISTENING"') do (
   echo Encerrando processo antigo na porta 5173: %%P
   taskkill /F /PID %%P >nul 2>nul
+  if errorlevel 1 echo Aviso: nao foi possivel encerrar o PID %%P. Verifique manualmente.
 )
 
 echo Abrindo backend em http://localhost:3001/api
