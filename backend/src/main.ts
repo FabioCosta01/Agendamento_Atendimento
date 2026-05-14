@@ -8,30 +8,34 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
 import { LoggingInterceptor } from './common/logging.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const bootstrapEnv = process.env.NODE_ENV ?? 'development';
+  const app = await NestFactory.create(AppModule, {
+    logger: bootstrapEnv === 'production' ? ['error', 'warn', 'log'] : ['error', 'warn', 'log', 'debug', 'verbose'],
+  });
   const logger = new Logger('Bootstrap');
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3001);
-  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
-  const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:5173');
+  const frontendUrl = configService.get<string>('FRONTEND_URL');
   const trustProxy = configService.get<string>('TRUST_PROXY', 'false') === 'true';
-  const allowedOrigins =
-    nodeEnv === 'production'
-      ? [frontendUrl].filter((origin): origin is string => Boolean(origin))
-      : ['http://localhost:5173', 'http://127.0.0.1:5173', frontendUrl];
+  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
+  const allowedOrigins = (frontendUrl ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   const allowedOriginSet = new Set(allowedOrigins);
-  const isAllowedLocalNetworkOrigin = (origin: string) => {
+  const isAllowedDevelopmentOrigin = (origin: string) => {
     try {
       const url = new URL(origin);
-      const isDevPort = url.port === '5173';
-      const isPrivateHost =
+      const isHttp = url.protocol === 'http:';
+      const isFrontendDevPort = url.port === '5173';
+      const isLocalOrPrivateNetwork =
         url.hostname === 'localhost' ||
         url.hostname === '127.0.0.1' ||
         url.hostname.startsWith('10.') ||
         url.hostname.startsWith('192.168.') ||
         /^172\.(1[6-9]|2\d|3[0-1])\./.test(url.hostname);
 
-      return isDevPort && isPrivateHost;
+      return isHttp && isFrontendDevPort && isLocalOrPrivateNetwork;
     } catch {
       return false;
     }
@@ -60,13 +64,19 @@ async function bootstrap() {
 
   app.enableCors({
     origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
-      if (!origin || allowedOriginSet.has(origin) || (nodeEnv !== 'production' && isAllowedLocalNetworkOrigin(origin))) {
+      if (
+        !origin ||
+        allowedOriginSet.has(origin) ||
+        (nodeEnv !== 'production' && isAllowedDevelopmentOrigin(origin))
+      ) {
         callback(null, true);
         return;
       }
 
       callback(new Error('Origem nao permitida pelo CORS'));
     },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
     credentials: true,
   });
 

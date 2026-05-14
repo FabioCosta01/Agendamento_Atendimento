@@ -5,6 +5,7 @@ import { UserRole } from 'shared';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SagaeMunicipiosService } from '../sagae/sagae-municipios.service';
 
 import { AtualizarStatusAgendamentoDto } from './dto/atualizar-status-agendamento.dto';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
@@ -15,10 +16,11 @@ export class AgendamentosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificacoesService,
+    private readonly sagaeMunicipiosService: SagaeMunicipiosService,
   ) {}
 
   async findAll(user?: AuthenticatedUser) {
-    return this.prisma.appointment.findMany({
+    const appointments = await this.prisma.appointment.findMany({
       where: this.buildWhereForUser(user),
       include: {
         requester: {
@@ -45,6 +47,8 @@ export class AgendamentosService {
         createdAt: 'desc',
       },
     });
+
+    return this.sagaeMunicipiosService.attachMunicipalitiesToAppointments(appointments);
   }
 
   async create(createAppointmentDto: CriarAgendamentoDto, user: AuthenticatedUser) {
@@ -142,7 +146,7 @@ export class AgendamentosService {
       status: appointment.status,
     });
 
-    return appointment;
+    return this.sagaeMunicipiosService.attachMunicipalitiesToAppointment(appointment);
   }
 
   async updateStatus(protocolCode: string, updateStatusDto: AtualizarStatusAgendamentoDto, user: AuthenticatedUser) {
@@ -241,7 +245,7 @@ export class AgendamentosService {
       );
     }
 
-    return updatedAppointment;
+    return this.sagaeMunicipiosService.attachMunicipalitiesToAppointment(updatedAppointment);
   }
 
   async reschedule(protocolCode: string, rescheduleAppointmentDto: ReagendarAgendamentoDto, user: AuthenticatedUser) {
@@ -349,7 +353,7 @@ export class AgendamentosService {
       ].join('\n'),
     );
 
-    return updatedAppointment;
+    return this.sagaeMunicipiosService.attachMunicipalitiesToAppointment(updatedAppointment);
   }
 
   private async generateProtocolCode(tx: Prisma.TransactionClient = this.prisma) {

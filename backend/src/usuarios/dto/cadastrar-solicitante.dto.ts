@@ -5,7 +5,7 @@ export class CadastrarSolicitanteDto {
   @IsNotEmpty()
   document!: string;
 
-  @IsEmail({}, { message: 'E-mail invalido' })
+  @IsEmail({}, { message: 'Informe um e-mail valido' })
   @IsNotEmpty()
   email!: string;
 
@@ -14,7 +14,7 @@ export class CadastrarSolicitanteDto {
   name!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(6, { message: 'A senha deve ter no minimo 6 digitos' })
   password!: string;
 
   @IsString()

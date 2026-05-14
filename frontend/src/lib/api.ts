@@ -2,26 +2,32 @@ import axios from 'axios';
 
 import { AppointmentStatus, UserRole } from 'shared';
 
-const defaultDevApiUrl =
-  typeof window === 'undefined' ? 'http://localhost:3001/api' : `http://${window.location.hostname}:3001/api`;
+function getDefaultDevApiUrl() {
+  if (typeof window === 'undefined') {
+    return '/api';
+  }
+
+  return `http://${window.location.hostname}:3001/api`;
+}
+
+function getConfiguredApiUrl() {
+  const configuredUrl = import.meta.env.VITE_API_URL?.trim();
+
+  return configuredUrl;
+}
+
+const defaultDevApiUrl = getDefaultDevApiUrl();
 const defaultApiUrl = import.meta.env.PROD ? '/api' : defaultDevApiUrl;
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? defaultApiUrl,
+  baseURL: getConfiguredApiUrl() ?? defaultApiUrl,
 });
-
-// Log API base URL on initialization (development only)
-if (typeof window !== 'undefined' && import.meta.env.DEV) {
-  console.log('[API] Base URL:', api.defaults.baseURL);
-  console.log('[API] Using VITE_API_URL:', !!import.meta.env.VITE_API_URL);
-  console.log('[API] Environment:', { isProd: import.meta.env.PROD, isDev: import.meta.env.DEV });
-}
 
 // Add error interceptor for connection diagnostics
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (axios.isAxiosError(error)) {
+    if (import.meta.env.DEV && axios.isAxiosError(error)) {
       if (!error.response) {
         // Network error - connection refused, timeout, etc.
         console.error('[API] Connection Error Details:', {
@@ -273,7 +279,7 @@ export async function fetchProperties(ownerId?: string) {
 export async function fetchDashboardData(role?: UserRole): Promise<DashboardPayload> {
   const shouldFetchUsers = role === UserRole.ADMINISTRADOR;
   const shouldFetchMunicipalities = role === UserRole.ADMINISTRADOR || role === UserRole.EXTENSIONISTA;
-  const [users, serviceMunicipalities, services, properties, availability, appointments, notifications] = await Promise.allSettled([
+  const [users, serviceMunicipalities, services, properties, availability, appointments, notifications] = await Promise.all([
     shouldFetchUsers ? api.get<UserRecord[]>('/usuarios') : Promise.resolve({ data: [] as UserRecord[] }),
     shouldFetchMunicipalities
       ? api.get<ServiceMunicipalityRecord[]>('/pontos-atendimento')
@@ -286,13 +292,13 @@ export async function fetchDashboardData(role?: UserRole): Promise<DashboardPayl
   ]);
 
   return {
-    users: users.status === 'fulfilled' ? users.value.data : [],
-    serviceMunicipalities: serviceMunicipalities.status === 'fulfilled' ? serviceMunicipalities.value.data : [],
-    services: services.status === 'fulfilled' ? services.value.data : [],
-    properties: properties.status === 'fulfilled' ? properties.value.data : [],
-    availability: availability.status === 'fulfilled' ? availability.value.data : [],
-    appointments: appointments.status === 'fulfilled' ? appointments.value.data : [],
-    notifications: notifications.status === 'fulfilled' ? notifications.value.data : [],
+    users: users.data,
+    serviceMunicipalities: serviceMunicipalities.data,
+    services: services.data,
+    properties: properties.data,
+    availability: availability.data,
+    appointments: appointments.data,
+    notifications: notifications.data,
   };
 }
 

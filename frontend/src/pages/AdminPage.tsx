@@ -60,7 +60,7 @@ export function AdminPage({
       });
     } catch (userError) {
       setFeedback('Nao foi possivel cadastrar o usuario.');
-      console.error(userError);
+      if (import.meta.env.DEV) { console.error(userError); }
     }
   }
 
@@ -78,7 +78,7 @@ export function AdminPage({
       });
     } catch (serviceError) {
       setFeedback('Nao foi possivel cadastrar o servico.');
-      console.error(serviceError);
+      if (import.meta.env.DEV) { console.error(serviceError); }
     }
   }
 

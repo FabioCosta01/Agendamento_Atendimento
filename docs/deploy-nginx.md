@@ -5,7 +5,7 @@ Este projeto ja pode ser publicado com `Nginx` servindo o frontend estatico e en
 ## Visao geral
 
 - `frontend/dist/`: arquivos estaticos gerados pelo `Vite`
-- `backend`: processo Node escutando, por exemplo, em `127.0.0.1:3001`
+- `backend`: processo Node escutando no host definido como `BACKEND_HOST` no Nginx
 - `Nginx`: entrega o frontend e faz proxy reverso para `/api`
 
 ## 1. Gerar build do frontend
@@ -42,7 +42,10 @@ Em `backend/.env`, para producao:
 - `PORT=3001`
 - `JWT_SECRET` forte
 - `DATABASE_URL` apontando para o banco de producao
-- `FRONTEND_URL=https://seu-dominio-oficial`
+- `FRONTEND_URL=https://DOMINIO_FINAL` ou origem temporaria da VM
+- `SAGAE_MUNICIPIOS_URL=http://teste.sagae.empaer.mt.gov.br:8080/api/municipios`
+- `SAGAE_EXTENSIONISTAS_LOGIN_URL=http://teste.sagae.empaer.mt.gov.br:8080/api/login`
+- `SAGAE_API_TOKEN=` se o SAGAe exigir token/chave de API
 
 ## 4. Configuracao do Nginx
 
@@ -54,24 +57,27 @@ Esse arquivo faz:
 
 - entrega do `frontend/dist`
 - fallback para `index.html` em rotas SPA
-- proxy de `/api/` para `127.0.0.1:3001`
+- proxy de `/api/` para `http://BACKEND_HOST:3001/api/`
 - cache para assets estaticos
 
 ## 5. Ajustes necessarios no servidor
 
 - apontar `root` do Nginx para a pasta real onde o `frontend/dist` foi publicado
-- ajustar `server_name` para o dominio oficial
-- configurar `SSL` com certificado valido
+- antes do dominio, substituir `IP_DA_VM` pelo endereco temporario
+- quando o dominio sair, ajustar `server_name` para `DOMINIO_FINAL`
+- quando o dominio sair, configurar `SSL` com certificado valido e ativar o bloco HTTPS comentado
 - garantir permissao de escrita para `backend/uploads/`
 
 ## 6. Observacao sobre o frontend
 
-O frontend agora usa `/api` automaticamente quando esta em modo de producao. Isso permite publicar frontend e backend no mesmo dominio sem depender de `localhost:3001` no navegador.
+O frontend usa `/api` automaticamente quando esta em modo de producao. Isso permite publicar frontend e backend no mesmo dominio sem depender de endereco fixo no navegador.
 
 Se voce quiser forcar outro endpoint, pode definir:
 
 ```bash
-VITE_API_URL=https://api.seu-dominio.gov.br/api
+VITE_API_URL=https://api.DOMINIO_FINAL/api
 ```
 
 antes da build do frontend.
+
+

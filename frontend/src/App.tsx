@@ -18,7 +18,6 @@ import {
   hydrateAuthToken,
   login,
   completeMandatoryPasswordChange,
-  recoverPassword,
   markNotificationAsRead,
   registerRequester,
   rescheduleAppointment,
@@ -35,6 +34,8 @@ import {
 } from './lib/api';
 import { formatCPF, isValidCPF, validateCPFProgress } from './lib/cpf';
 import { LocalMessagesContainer, useLocalMessages } from './components/LocalMessages';
+
+const MATO_GROSSO_STATE = 'MT';
 
 const emptyData: DashboardPayload = {
   users: [],
@@ -415,18 +416,12 @@ function escapeHtml(value: string) {
 export default function App() {
   const [loginDocument, setLoginDocument] = useState('');
   const [loginDocumentCpfError, setLoginDocumentCpfError] = useState('');
+  const [loginFieldErrors, setLoginFieldErrors] = useState<{ document?: string; password?: string }>({});
   const [password, setPassword] = useState('');
   const [loginMode, setLoginMode] = useState<'login' | 'register'>('login');
   const [loginError, setLoginError] = useState('');
   const [loginSubmitting, setLoginSubmitting] = useState(false);
-  const [recoverModalOpen, setRecoverModalOpen] = useState(false);
-  const [recoverDocument, setRecoverDocument] = useState('');
-  const [recoverDocumentCpfError, setRecoverDocumentCpfError] = useState('');
-  const [recoverPhone, setRecoverPhone] = useState('');
-  const [recoverSubmitting, setRecoverSubmitting] = useState(false);
-  const [recoverError, setRecoverError] = useState('');
-  const [recoverMessage, setRecoverMessage] = useState('');
-  const [recoverProvisionalPassword, setRecoverProvisionalPassword] = useState<string | null>(null);
+  const [recoveryNoticeOpen, setRecoveryNoticeOpen] = useState(false);
   const [mandatoryNewPassword, setMandatoryNewPassword] = useState('');
   const [mandatoryConfirmPassword, setMandatoryConfirmPassword] = useState('');
   const [mandatoryPasswordError, setMandatoryPasswordError] = useState('');
@@ -450,7 +445,8 @@ export default function App() {
   const [selectedProtocol, setSelectedProtocol] = useState<AppointmentRecord | null>(null);
   const [activeAgendaActionId, setActiveAgendaActionId] = useState<string | null>(null);
   const [userForm, setUserForm] = useState(initialUserForm);
-  const [userFormDocumentError, setUserFormDocumentError] = useState('');
+  const [userFormErrors, setUserFormErrors] = useState<Partial<Record<keyof typeof initialUserForm, string>>>({});
+  const [municipalitySearch, setMunicipalitySearch] = useState('');
   const [adminUserRoleFilter, setAdminUserRoleFilter] = useState<UserRole | ''>('');
   const [selectedAdminUserId, setSelectedAdminUserId] = useState('');
   const [requesters, setRequesters] = useState<UserRecord[]>([]);
@@ -783,7 +779,7 @@ export default function App() {
       municipalities.set(slot.municipality.id, {
         id: slot.municipality.id,
         name: slot.municipality.name,
-        state: slot.municipality.state,
+        state: MATO_GROSSO_STATE,
         total: (current?.total ?? 0) + 1,
       });
     });
@@ -1245,7 +1241,7 @@ export default function App() {
       setData(nextData);
     } catch (error) {
       setDataError(getApiErrorMessage(error, 'Nao foi possivel carregar os dados do backend.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -1283,7 +1279,7 @@ export default function App() {
       }
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel carregar os solicitantes.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     } finally {
       setLoadingRequesters(false);
     }
@@ -1300,7 +1296,7 @@ export default function App() {
       setRequesterProperties(properties);
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel carregar propriedades do solicitante.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -1342,7 +1338,7 @@ export default function App() {
           setDataError('Sessao expirada ou backend indisponivel.');
         }
 
-        console.error(error);
+        if (import.meta.env.DEV) { console.error(error); }
       } finally {
         if (active) {
           setSessionChecking(false);
@@ -1473,48 +1469,92 @@ export default function App() {
     }
   }, [filteredAdminUsers, selectedAdminUserId]);
 
-  function getRegistrationFormErrors(form: typeof initialRequesterRegistrationForm) {
+  function getLoginFormErrors() {
+    const errors: { document?: string; password?: string } = {};
+    const document = loginDocument.replace(/\D/g, '');
+
+    if (!document) {
+      errors.document = 'Campo obrigatorio';
+    } else if (!isValidCPF(document)) {
+      errors.document = 'Informe um CPF valido';
+    }
+
+    if (!password) {
+      errors.password = 'Campo obrigatorio';
+    } else if (password.length < 6) {
+      errors.password = 'A senha deve ter no minimo 6 digitos';
+    }
+
+    return errors;
+  }
+
+  function getRequesterRegistrationErrors(form: typeof initialRequesterRegistrationForm) {
     const errors: Partial<Record<keyof typeof initialRequesterRegistrationForm, string>> = {};
     const document = form.document.replace(/\D/g, '');
     const phone = form.phone.replace(/\D/g, '');
 
     if (!document) {
-      errors.document = 'Campo obrigatório';
+      errors.document = 'Campo obrigatorio';
     } else if (!isValidCPF(document)) {
-      errors.document = 'CPF inválido. Digite um CPF válido.';
+      errors.document = 'Informe um CPF valido';
     }
 
     if (!form.name.trim()) {
-      errors.name = 'Campo obrigatório';
+      errors.name = 'Campo obrigatorio';
     }
 
-    const email = form.email.trim().toLowerCase();
-    if (!email) {
-      errors.email = 'Campo obrigatório';
-    } else if (!isValidEmailFormat(email)) {
-      errors.email = 'E-mail inválido';
+    if (!form.email.trim()) {
+      errors.email = 'Campo obrigatorio';
+    } else if (!isValidEmailFormat(form.email.trim())) {
+      errors.email = 'Informe um e-mail valido';
     }
 
     if (!form.password) {
-      errors.password = 'Campo obrigatório';
-    } else if (form.password.length < 8) {
-      errors.password = 'Senha deve ter pelo menos 8 caracteres';
-    } else if (form.password.replace(/\D/g, '') === document || form.password === '12345678') {
-      errors.password = 'Use uma senha diferente do CPF e de senhas comuns';
+      errors.password = 'Campo obrigatorio';
+    } else if (form.password.length < 6) {
+      errors.password = 'A senha deve ter no minimo 6 digitos';
     }
 
     if (!phone) {
-      errors.phone = 'Campo obrigatório';
+      errors.phone = 'Campo obrigatorio';
     } else if (phone.length < 10) {
-      errors.phone = 'Telefone inválido';
+      errors.phone = 'Informe um telefone valido';
     }
 
     if (!form.community.trim()) {
-      errors.community = 'Campo obrigatório';
+      errors.community = 'Campo obrigatorio';
     }
 
     if (!form.city.trim()) {
-      errors.city = 'Campo obrigatório';
+      errors.city = 'Campo obrigatorio';
+    }
+
+    return errors;
+  }
+
+  function getUserFormErrors(form: typeof initialUserForm) {
+    const errors: Partial<Record<keyof typeof initialUserForm, string>> = {};
+
+    if (!form.name.trim()) {
+      errors.name = 'Campo obrigatorio';
+    }
+
+    if (!form.email.trim()) {
+      errors.email = 'Campo obrigatorio';
+    } else if (!isValidEmailFormat(form.email.trim())) {
+      errors.email = 'Informe um e-mail valido';
+    }
+
+    if (!form.document.replace(/\D/g, '')) {
+      errors.document = 'Campo obrigatorio';
+    } else if (!isValidCPF(form.document)) {
+      errors.document = 'Informe um CPF valido';
+    }
+
+    if (!form.password) {
+      errors.password = 'Campo obrigatorio';
+    } else if (form.password.length < 6) {
+      errors.password = 'A senha deve ter no minimo 6 digitos';
     }
 
     return errors;
@@ -1523,6 +1563,14 @@ export default function App() {
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoginError('');
+
+    const loginErrors = getLoginFormErrors();
+    if (Object.keys(loginErrors).length > 0) {
+      setLoginFieldErrors(loginErrors);
+      return;
+    }
+
+    setLoginFieldErrors({});
 
     const cleanDocument = loginDocument.replace(/\D/g, '');
     const cpfErrorMessage = validateCPFProgress(formatCPF(loginDocument));
@@ -1545,8 +1593,8 @@ export default function App() {
         setData(emptyData);
       }
     } catch (error) {
-      setLoginError(getApiErrorMessage(error, 'Falha no login. Confira documento e senha.'));
-      console.error(error);
+      setLoginError(getApiErrorMessage(error, 'Falha no login. Confira seu Usuário e senha.'));
+      if (import.meta.env.DEV) { console.error(error); }
     } finally {
       setLoginSubmitting(false);
     }
@@ -1556,7 +1604,7 @@ export default function App() {
     event.preventDefault();
     setLoginError('');
 
-    const errors = getRegistrationFormErrors(registrationForm);
+    const errors = getRequesterRegistrationErrors(registrationForm);
     if (Object.keys(errors).length > 0) {
       setRegistrationErrors(errors);
       return;
@@ -1596,65 +1644,20 @@ export default function App() {
       } else if (backendMessage.includes('E-mail ja cadastrado')) {
         setRegistrationErrors({ email: 'E-mail ja cadastrado' });
       } else if (backendMessage.toLowerCase().includes('e-mail invalido')) {
-        setRegistrationErrors({ email: 'E-mail invalido' });
+        setRegistrationErrors({ email: 'Informe um e-mail valido' });
       } else if (backendMessage.includes('CPF invalido')) {
-        setRegistrationErrors({ document: 'CPF invalido' });
+        setRegistrationErrors({ document: 'Informe um CPF valido' });
       } else if (backendMessage.includes('Telefone')) {
         setRegistrationErrors({ phone: backendMessage });
       } else if (backendMessage.includes('Preencha')) {
-        setRegistrationErrors(getRegistrationFormErrors(registrationForm));
+        setRegistrationErrors(getRequesterRegistrationErrors(registrationForm));
       } else {
         setLoginError(backendMessage);
       }
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     } finally {
       setLoginSubmitting(false);
     }
-  }
-
-  async function handleRecoverPasswordSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setRecoverError('');
-    setRecoverMessage('');
-    setRecoverProvisionalPassword(null);
-
-    const cleanDoc = recoverDocument.replace(/\D/g, '');
-    if (cleanDoc.length !== 11 || !isValidCPF(cleanDoc)) {
-      setRecoverError('CPF inválido. Digite um CPF válido.');
-      return;
-    }
-
-    const phoneDigits = recoverPhone.replace(/\D/g, '');
-    if (phoneDigits.length < 10) {
-      setRecoverError('Informe o telefone cadastrado com DDD.');
-      return;
-    }
-
-    setRecoverSubmitting(true);
-
-    try {
-      const result = await recoverPassword({ document: cleanDoc, phone: phoneDigits });
-      if (result.provisionalPassword) {
-        setRecoverProvisionalPassword(result.provisionalPassword);
-        return;
-      }
-      setRecoverMessage(result.message);
-    } catch (error) {
-      setRecoverError(getApiErrorMessage(error, 'Não foi possível concluir a recuperação.'));
-      console.error(error);
-    } finally {
-      setRecoverSubmitting(false);
-    }
-  }
-
-  function closeRecoverModal() {
-    setRecoverModalOpen(false);
-    setRecoverDocument('');
-    setRecoverDocumentCpfError('');
-    setRecoverPhone('');
-    setRecoverError('');
-    setRecoverMessage('');
-    setRecoverProvisionalPassword(null);
   }
 
   async function handleMandatoryPasswordChange(event: FormEvent<HTMLFormElement>) {
@@ -1665,8 +1668,8 @@ export default function App() {
       return;
     }
 
-    if (mandatoryNewPassword.length < 8) {
-      setMandatoryPasswordError('A nova senha deve ter pelo menos 8 caracteres.');
+    if (mandatoryNewPassword.length < 6) {
+      setMandatoryPasswordError('A nova senha deve ter no minimo 6 digitos.');
       return;
     }
 
@@ -1692,7 +1695,7 @@ export default function App() {
       await refreshData(me.role);
     } catch (error) {
       setMandatoryPasswordError(getApiErrorMessage(error, 'Não foi possível atualizar a senha.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     } finally {
       setMandatoryPasswordSubmitting(false);
     }
@@ -1732,7 +1735,7 @@ export default function App() {
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel gerar o protocolo.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -1790,7 +1793,7 @@ export default function App() {
       }
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, editingPropertyId ? 'Nao foi possivel atualizar a propriedade.' : 'Nao foi possivel cadastrar a propriedade.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -1801,14 +1804,14 @@ export default function App() {
     }
 
     const selectedMunicipio = data.serviceMunicipalities.find(
-      (municipality) => municipality.name === property.city && municipality.state === property.state,
+      (municipality) => municipality.name === property.city,
     );
 
     setSelectedPropertyMunicipalityId(selectedMunicipio?.id ?? '');
     setPropertyForm({
       displayName: property.displayName,
       city: property.city,
-      state: property.state,
+      state: MATO_GROSSO_STATE,
       address: property.address ?? '',
       ruralRegistry: property.ruralRegistry ?? '',
       funruralCode: property.funruralCode ?? '',
@@ -1838,7 +1841,7 @@ export default function App() {
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel remover propriedade.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -1948,7 +1951,7 @@ export default function App() {
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel gerar a semana.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -1984,7 +1987,7 @@ export default function App() {
               'Nao foi possivel excluir. Horarios com atendimento no historico ficam bloqueados.',
             ),
           );
-          console.error(error);
+          if (import.meta.env.DEV) { console.error(error); }
         }
       },
     });
@@ -2013,7 +2016,7 @@ export default function App() {
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel aprovar o atendimento.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -2028,7 +2031,7 @@ export default function App() {
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel concluir o atendimento.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -2052,7 +2055,7 @@ export default function App() {
           await refreshData();
         } catch (error) {
           localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel cancelar o atendimento.'));
-          console.error(error);
+          if (import.meta.env.DEV) { console.error(error); }
         }
       },
     });
@@ -2301,7 +2304,7 @@ export default function App() {
                 <strong>${requester}</strong>
               </div>
               <div class="field">
-                <span>Documento (CPF)</span>
+                <span>USUÁRIO</span>
                 <strong>${cpfForPrint}</strong>
               </div>
               <div class="field">
@@ -2354,7 +2357,7 @@ export default function App() {
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel reagendar o atendimento.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -2364,33 +2367,37 @@ export default function App() {
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel marcar a notificacao como lida.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
   async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const formatted = formatCPF(userForm.document);
-    const cpfErrorMessage = validateCPFProgress(formatted);
-    const digits = userForm.document.replace(/\D/g, '');
-
-    if (cpfErrorMessage || digits.length !== 11) {
-      setUserFormDocumentError('CPF inválido. Digite um CPF válido.');
+    const errors = getUserFormErrors(userForm);
+    if (Object.keys(errors).length > 0) {
+      setUserFormErrors(errors);
       return;
     }
 
-    setUserFormDocumentError('');
+    setUserFormErrors({});
 
     try {
       await createUser(userForm);
       localMessages.addMessage('success', 'Usuario cadastrado.');
       setUserForm(initialUserForm);
-      setUserFormDocumentError('');
+      setUserFormErrors({});
       await refreshData();
     } catch (error) {
-      localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel cadastrar o usuario.'));
-      console.error(error);
+      const message = getApiErrorMessage(error, 'Nao foi possivel cadastrar o usuario.');
+      if (message.toLowerCase().includes('cpf') || message.toLowerCase().includes('documento')) {
+        setUserFormErrors({ document: message.toLowerCase().includes('cadastrado') ? 'CPF ja cadastrado' : 'Informe um CPF valido' });
+      } else if (message.toLowerCase().includes('e-mail') || message.toLowerCase().includes('email')) {
+        setUserFormErrors({ email: message.toLowerCase().includes('cadastrado') ? 'E-mail ja cadastrado' : 'Informe um e-mail valido' });
+      } else {
+        localMessages.addMessage('error', message);
+      }
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -2404,7 +2411,7 @@ export default function App() {
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel cadastrar o servico.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -2421,7 +2428,7 @@ export default function App() {
           await refreshData();
         } catch (error) {
           localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel alterar o usuario.'));
-          console.error(error);
+          if (import.meta.env.DEV) { console.error(error); }
         }
       },
     });
@@ -2438,7 +2445,7 @@ export default function App() {
       await refreshData();
     } catch (error) {
       localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel alterar os municipios de atendimento.'));
-      console.error(error);
+      if (import.meta.env.DEV) { console.error(error); }
     }
   }
 
@@ -2455,7 +2462,7 @@ export default function App() {
           await refreshData();
         } catch (error) {
           localMessages.addMessage('error', getApiErrorMessage(error, 'Nao foi possivel alterar o servico.'));
-          console.error(error);
+          if (import.meta.env.DEV) { console.error(error); }
         }
       },
     });
@@ -2566,7 +2573,7 @@ export default function App() {
             <h2>{loginMode === 'login' ? 'Entrar no sistema' : 'Criar cadastro'}</h2>
             <p>
               {loginMode === 'login'
-                ? 'Use seu documento e senha cadastrados.'
+                ? 'Use seu Usuário e senha cadastrados.'
                 : 'Cadastro simples para solicitante e propriedade rural.'}
             </p>
           </div>
@@ -2579,7 +2586,6 @@ export default function App() {
                 setLoginMode('login');
                 setLoginError('');
                 setLoginDocumentCpfError('');
-                closeRecoverModal();
               }}
             >
               Entrar
@@ -2591,7 +2597,6 @@ export default function App() {
                 setLoginMode('register');
                 setLoginError('');
                 setLoginDocumentCpfError('');
-                closeRecoverModal();
               }}
             >
               Cadastrar
@@ -2600,32 +2605,53 @@ export default function App() {
 
           {loginMode === 'login' ? (
             <form className="compact-form" onSubmit={handleLogin}>
-              <label>
-                Documento (CPF)
+              <label className={loginFieldErrors.document ? 'invalid' : ''}>
+                <span className="field-label">USUÁRIO <span className="required-mark">*</span></span>
                 <input
                   value={formatCPF(loginDocument)}
                   inputMode="numeric"
                   maxLength={14}
-                  className={loginDocumentCpfError ? 'input-error' : ''}
+                  className={loginFieldErrors.document || loginDocumentCpfError ? 'input-error' : ''}
+                  aria-invalid={Boolean(loginFieldErrors.document || loginDocumentCpfError)}
+                  aria-describedby={loginFieldErrors.document || loginDocumentCpfError ? 'login-document-error' : undefined}
                   onChange={(event) => {
                     const formatted = formatCPF(event.target.value);
                     const digits = formatted.replace(/\D/g, '').slice(0, 11);
                     setLoginDocument(digits);
                     setLoginDocumentCpfError(validateCPFProgress(formatted));
+                    setLoginFieldErrors((current) => ({ ...current, document: undefined }));
                   }}
                 />
-                {loginDocumentCpfError ? <small className="error-message">{loginDocumentCpfError}</small> : null}
+                {loginFieldErrors.document || loginDocumentCpfError ? (
+                  <small id="login-document-error" className="field-error">
+                    {loginFieldErrors.document || 'Informe um CPF valido'}
+                  </small>
+                ) : null}
               </label>
-              <label>
-                Senha
-                <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+              <label className={loginFieldErrors.password ? 'invalid' : ''}>
+                <span className="field-label">SENHA <span className="required-mark">*</span></span>
+                <input
+                  type="password"
+                  className={loginFieldErrors.password ? 'input-error' : ''}
+                  value={password}
+                  aria-invalid={Boolean(loginFieldErrors.password)}
+                  aria-describedby={loginFieldErrors.password ? 'login-password-error' : 'login-password-help'}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setLoginFieldErrors((current) => ({ ...current, password: undefined }));
+                  }}
+                />
+                {loginFieldErrors.password ? (
+                  <small id="login-password-error" className="field-error">{loginFieldErrors.password}</small>
+                ) : (
+                  <small id="login-password-help">A senha deve ter no minimo 6 digitos</small>
+                )}
               </label>
               <button
                 type="submit"
                 disabled={
                   loginSubmitting ||
-                  validateCPFProgress(formatCPF(loginDocument)) !== '' ||
-                  loginDocument.replace(/\D/g, '').length !== 11
+                  Object.keys(getLoginFormErrors()).length > 0
                 }
               >
                 {loginSubmitting ? 'Entrando...' : 'Acessar'}
@@ -2634,15 +2660,7 @@ export default function App() {
                 <button
                   type="button"
                   className="login-text-action"
-                  onClick={() => {
-                    setRecoverModalOpen(true);
-                    setRecoverDocument('');
-                    setRecoverDocumentCpfError('');
-                    setRecoverPhone('');
-                    setRecoverError('');
-                    setRecoverMessage('');
-                    setRecoverProvisionalPassword(null);
-                  }}
+                  onClick={() => setRecoveryNoticeOpen(true)}
                 >
                   Recuperar senha
                 </button>
@@ -2651,73 +2669,85 @@ export default function App() {
           ) : (
             <form className="compact-form" onSubmit={handleRequesterRegistration}>
               <label className={registrationErrors.document ? 'invalid' : ''}>
-                CPF
+                <span className="field-label">USUÁRIO <span className="required-mark">*</span></span>
                 <input
                   value={formatCPF(registrationForm.document)}
                   inputMode="numeric"
                   maxLength={14}
                   className={registrationErrors.document ? 'input-error' : ''}
+                  aria-invalid={Boolean(registrationErrors.document)}
+                  aria-describedby={registrationErrors.document ? 'register-document-error' : undefined}
                   onChange={(event) => {
                     const formatted = formatCPF(event.target.value);
                     const digits = formatted.replace(/\D/g, '').slice(0, 11);
                     setRegistrationForm((current) => ({ ...current, document: digits }));
-                    const err = validateCPFProgress(formatted);
+                    const err = digits.length === 11 && !isValidCPF(digits) ? 'Informe um CPF valido' : validateCPFProgress(formatted);
                     setRegistrationErrors((current) => ({ ...current, document: err || undefined }));
                   }}
                 />
                 {registrationErrors.document ? (
-                  <small className="error-message">{registrationErrors.document}</small>
+                  <small id="register-document-error" className="field-error">{registrationErrors.document}</small>
                 ) : null}
               </label>
               <label className={registrationErrors.name ? 'invalid' : ''}>
-                Nome
+                <span className="field-label">NOME <span className="required-mark">*</span></span>
                 <input
                   value={registrationForm.name}
+                  aria-invalid={Boolean(registrationErrors.name)}
+                  aria-describedby={registrationErrors.name ? 'register-name-error' : undefined}
                   onChange={(event) => {
                     setRegistrationForm((current) => ({ ...current, name: event.target.value }));
                     setRegistrationErrors((current) => ({ ...current, name: undefined }));
                   }}
                 />
                 {registrationErrors.name ? (
-                  <small className="field-error">{registrationErrors.name}</small>
+                  <small id="register-name-error" className="field-error">{registrationErrors.name}</small>
                 ) : null}
               </label>
               <label className={registrationErrors.email ? 'invalid' : ''}>
-                E-mail
+                <span className="field-label">E-MAIL <span className="required-mark">*</span></span>
                 <input
                   type="email"
                   autoComplete="email"
                   value={registrationForm.email}
                   className={registrationErrors.email ? 'input-error' : ''}
+                  aria-invalid={Boolean(registrationErrors.email)}
+                  aria-describedby={registrationErrors.email ? 'register-email-error' : undefined}
                   onChange={(event) => {
                     setRegistrationForm((current) => ({ ...current, email: event.target.value }));
                     setRegistrationErrors((current) => ({ ...current, email: undefined }));
                   }}
                 />
                 {registrationErrors.email ? (
-                  <small className="field-error">{registrationErrors.email}</small>
+                  <small id="register-email-error" className="field-error">{registrationErrors.email}</small>
                 ) : null}
               </label>
               <label className={registrationErrors.password ? 'invalid' : ''}>
-                Senha
+                <span className="field-label">SENHA <span className="required-mark">*</span></span>
                 <input
                   type="password"
                   value={registrationForm.password}
+                  aria-invalid={Boolean(registrationErrors.password)}
+                  aria-describedby={registrationErrors.password ? 'register-password-error' : 'register-password-help'}
                   onChange={(event) => {
                     setRegistrationForm((current) => ({ ...current, password: event.target.value }));
                     setRegistrationErrors((current) => ({ ...current, password: undefined }));
                   }}
                 />
                 {registrationErrors.password ? (
-                  <small className="field-error">{registrationErrors.password}</small>
-                ) : null}
+                  <small id="register-password-error" className="field-error">{registrationErrors.password}</small>
+                ) : (
+                  <small id="register-password-help">A senha deve ter no minimo 6 digitos</small>
+                )}
               </label>
               <label className={registrationErrors.phone ? 'invalid' : ''}>
-                Telefone
+                <span className="field-label">TELEFONE <span className="required-mark">*</span></span>
                 <input
                   value={formatPhone(registrationForm.phone)}
                   inputMode="tel"
                   maxLength={16}
+                  aria-invalid={Boolean(registrationErrors.phone)}
+                  aria-describedby={registrationErrors.phone ? 'register-phone-error' : undefined}
                   onChange={(event) => {
                     const value = event.target.value.replace(/\D/g, '').slice(0, 11);
                     setRegistrationForm((current) => ({ ...current, phone: value }));
@@ -2725,40 +2755,44 @@ export default function App() {
                   }}
                 />
                 {registrationErrors.phone ? (
-                  <small className="field-error">{registrationErrors.phone}</small>
+                  <small id="register-phone-error" className="field-error">{registrationErrors.phone}</small>
                 ) : null}
               </label>
               <label className={registrationErrors.community ? 'invalid' : ''}>
-                Comunidade
+                <span className="field-label">COMUNIDADE <span className="required-mark">*</span></span>
                 <input
                   value={registrationForm.community}
+                  aria-invalid={Boolean(registrationErrors.community)}
+                  aria-describedby={registrationErrors.community ? 'register-community-error' : undefined}
                   onChange={(event) => {
                     setRegistrationForm((current) => ({ ...current, community: event.target.value }));
                     setRegistrationErrors((current) => ({ ...current, community: undefined }));
                   }}
                 />
                 {registrationErrors.community ? (
-                  <small className="field-error">{registrationErrors.community}</small>
+                  <small id="register-community-error" className="field-error">{registrationErrors.community}</small>
                 ) : null}
               </label>
               <label className={registrationErrors.city ? 'invalid' : ''}>
-                Municipio
+                <span className="field-label">MUNICIPIO <span className="required-mark">*</span></span>
                 <input
                   value={registrationForm.city}
+                  aria-invalid={Boolean(registrationErrors.city)}
+                  aria-describedby={registrationErrors.city ? 'register-city-error' : undefined}
                   onChange={(event) => {
                     setRegistrationForm((current) => ({ ...current, city: event.target.value }));
                     setRegistrationErrors((current) => ({ ...current, city: undefined }));
                   }}
                 />
                 {registrationErrors.city ? (
-                  <small className="field-error">{registrationErrors.city}</small>
+                  <small id="register-city-error" className="field-error">{registrationErrors.city}</small>
                 ) : null}
               </label>
               <button
                 type="submit"
                 disabled={
                   loginSubmitting ||
-                  Object.keys(getRegistrationFormErrors(registrationForm)).length > 0
+                  Object.keys(getRequesterRegistrationErrors(registrationForm)).length > 0
                 }
               >
                 {loginSubmitting ? 'Cadastrando...' : 'Criar cadastro'}
@@ -2773,91 +2807,21 @@ export default function App() {
           {loginError || dataError ? <p className="alert error">{loginError || dataError}</p> : null}
         </section>
       </main>
-
-      {recoverModalOpen ? (
-        <div
-          className="confirm-overlay recover-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="recover-dialog-title"
-        >
-          <div className="confirm-dialog recover-dialog">
-            <span className="form-kicker">Recuperação de acesso</span>
-            <h2 id="recover-dialog-title">Recuperar senha</h2>
-            {recoverProvisionalPassword ? (
-              <>
-                <p>
-                  Senha provisória gerada. Anote-a com segurança. No próximo acesso será obrigatório definir uma nova
-                  senha.
-                </p>
-                <p className="recover-provisional-label">Senha provisória (copie agora)</p>
-                <div className="recover-provisional-value">{recoverProvisionalPassword}</div>
-                <div className="confirm-actions recover-dialog-actions">
-                  <button type="button" className="secondary" onClick={closeRecoverModal}>
-                    Fechar
-                  </button>
-                </div>
-              </>
-            ) : recoverMessage ? (
-              <>
-                <p>{recoverMessage}</p>
-                <div className="confirm-actions recover-dialog-actions">
-                  <button type="button" className="secondary" onClick={closeRecoverModal}>
-                    Fechar
-                  </button>
-                </div>
-              </>
-            ) : (
-              <form className="compact-form recover-form" onSubmit={handleRecoverPasswordSubmit}>
-                <p>Informe o CPF e o telefone cadastrados na sua conta. Se os dados conferirem, uma senha provisória será gerada.</p>
-                <label>
-                  CPF
-                  <input
-                    value={formatCPF(recoverDocument)}
-                    inputMode="numeric"
-                    maxLength={14}
-                    className={recoverDocumentCpfError ? 'input-error' : ''}
-                    onChange={(event) => {
-                      const formatted = formatCPF(event.target.value);
-                      const digits = formatted.replace(/\D/g, '').slice(0, 11);
-                      setRecoverDocument(digits);
-                      setRecoverDocumentCpfError(validateCPFProgress(formatted));
-                    }}
-                  />
-                  {recoverDocumentCpfError ? <small className="error-message">{recoverDocumentCpfError}</small> : null}
-                </label>
-                <label>
-                  Telefone (cadastrado)
-                  <input
-                    value={formatPhone(recoverPhone)}
-                    inputMode="tel"
-                    maxLength={16}
-                    onChange={(event) => {
-                      const value = event.target.value.replace(/\D/g, '').slice(0, 11);
-                      setRecoverPhone(value);
-                    }}
-                  />
-                </label>
-                {recoverError ? <p className="alert error">{recoverError}</p> : null}
-                <div className="confirm-actions recover-dialog-actions">
-                  <button type="button" className="secondary" onClick={closeRecoverModal}>
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={
-                      recoverSubmitting ||
-                      validateCPFProgress(formatCPF(recoverDocument)) !== '' ||
-                      recoverDocument.replace(/\D/g, '').length !== 11 ||
-                      recoverPhone.replace(/\D/g, '').length < 10
-                    }
-                  >
-                    {recoverSubmitting ? 'Enviando...' : 'Gerar senha provisória'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
+      {recoveryNoticeOpen ? (
+        <div className="confirm-overlay recovery-notice-overlay" role="dialog" aria-modal="true" aria-labelledby="recovery-notice-title">
+          <section className="confirm-dialog recovery-notice-dialog">
+            <div className="recovery-notice-icon" aria-hidden="true">EA</div>
+            <span className="form-kicker">Acesso institucional</span>
+            <h2 id="recovery-notice-title">Recuperação de senha em desenvolvimento.</h2>
+            <p>
+              Este recurso será liberado em breve. Por enquanto, solicite suporte ao administrador do sistema.
+            </p>
+            <div className="confirm-actions recovery-notice-actions">
+              <button type="button" onClick={() => setRecoveryNoticeOpen(false)}>
+                Entendi
+              </button>
+            </div>
+          </section>
         </div>
       ) : null}
       </>
@@ -3040,7 +3004,7 @@ export default function App() {
                     <div className="linked-property-summary">
                       <span>Municipio da propriedade</span>
                       <strong>
-                        {selectedProperty ? `${selectedProperty.city}/${selectedProperty.state}` : 'Selecione a propriedade'}
+                        {selectedProperty ? `${selectedProperty.city}/MT` : 'Selecione a propriedade'}
                       </strong>
                     </div>
                   </div>
@@ -3140,14 +3104,14 @@ export default function App() {
                       >
                         {requesterAvailableMunicipalities.map((municipality) => (
                           <option key={municipality.id} value={municipality.id}>
-                            {municipality.name}/{municipality.state} - {municipality.total} horario(s)
+                            {municipality.name}/MT - {municipality.total} horario(s)
                           </option>
                         ))}
                       </select>
                       <div>
                         <strong>
                           {selectedRequesterMunicipality
-                            ? `${selectedRequesterMunicipality.name}/${selectedRequesterMunicipality.state}`
+                            ? `${selectedRequesterMunicipality.name}/MT`
                             : 'Nenhum municipio disponivel'}
                         </strong>
                         <span>
@@ -3243,7 +3207,7 @@ export default function App() {
                       <span>Municipio</span>
                       <strong>
                         {selectedSlot?.municipality
-                          ? `${selectedSlot.municipality.name}/${selectedSlot.municipality.state}`
+                          ? `${selectedSlot.municipality.name}/MT`
                           : 'Nao definido'}
                       </strong>
                     </div>
@@ -3324,7 +3288,7 @@ export default function App() {
                       ) : null}
                       {managedAgendaMunicipalities.map((municipality) => (
                         <option key={municipality.id} value={municipality.id}>
-                          {municipality.name}/{municipality.state}
+                          {municipality.name}/MT
                         </option>
                       ))}
                     </select>
@@ -3381,7 +3345,7 @@ export default function App() {
                   >
                     {managedAgendaMunicipalities.map((municipality) => (
                       <option key={municipality.id} value={municipality.id}>
-                        {municipality.name}/{municipality.state}
+                        {municipality.name}/MT
                       </option>
                     ))}
                   </select>
@@ -3686,7 +3650,7 @@ export default function App() {
                         ) : null}
                         {managedAgendaMunicipalities.map((municipality) => (
                           <option key={municipality.id} value={municipality.id}>
-                            {municipality.name}/{municipality.state}
+                            {municipality.name}/MT
                           </option>
                         ))}
                       </select>
@@ -3769,7 +3733,7 @@ export default function App() {
                     >
                       {managedAgendaMunicipalities.map((municipality) => (
                         <option key={municipality.id} value={municipality.id}>
-                          {municipality.name}/{municipality.state}
+                          {municipality.name}/MT
                         </option>
                       ))}
                     </select>
@@ -3850,7 +3814,7 @@ export default function App() {
                             <div>
                               <strong>{property.displayName}</strong>
                               <p>
-                                {property.city}/{property.state}
+                                {property.city}/MT
                               </p>
                               <small>{property.address ?? 'Sem endereço'}</small>
                             </div>
@@ -3889,24 +3853,21 @@ export default function App() {
                               setPropertyForm((current) => ({
                                 ...current,
                                 city: selectedMunicipio?.name ?? '',
-                                state: selectedMunicipio?.state ?? current.state,
+                                state: MATO_GROSSO_STATE,
                               }));
                             }}
                           >
                             <option value="">Selecione um município</option>
                             {data.serviceMunicipalities.map((municipality) => (
                               <option key={municipality.id} value={municipality.id}>
-                                {municipality.name}/{municipality.state}
+                                {municipality.name}/MT
                               </option>
                             ))}
                           </select>
                         </label>
                         <label>
                           UF
-                          <input
-                            value={propertyForm.state}
-                            onChange={(event) => setPropertyForm((current) => ({ ...current, state: event.target.value }))}
-                          />
+                          <input value={MATO_GROSSO_STATE} readOnly />
                         </label>
                       </div>
                       <label>
@@ -3966,12 +3927,9 @@ export default function App() {
                   <div className="admin-agenda-selector">
                     <div>
                       <span>Perfil gerenciado</span>
-                      <strong>{selectedAgendaExtensionist?.name ?? 'Selecione um extensionista'}</strong>
                       <small>A agenda sempre pertence ao extensionista selecionado.</small>
-                    </div>
-                    <label>
-                      Extensionista
                       <select
+                        aria-label="Extensionista"
                         value={selectedAgendaExtensionistId}
                         onChange={(event) => {
                           setSelectedAgendaExtensionistId(event.target.value);
@@ -3985,7 +3943,7 @@ export default function App() {
                           </option>
                         ))}
                       </select>
-                    </label>
+                    </div>
                     <label>
                       Municipio
                       <select
@@ -3998,7 +3956,7 @@ export default function App() {
                         ) : null}
                         {managedAgendaMunicipalities.map((municipality) => (
                           <option key={municipality.id} value={municipality.id}>
-                            {municipality.name}/{municipality.state}
+                            {municipality.name}/MT
                           </option>
                         ))}
                       </select>
@@ -4065,7 +4023,7 @@ export default function App() {
                     >
                       {managedAgendaMunicipalities.map((municipality) => (
                         <option key={municipality.id} value={municipality.id}>
-                          {municipality.name}/{municipality.state}
+                          {municipality.name}/MT
                         </option>
                       ))}
                     </select>
@@ -4689,41 +4647,82 @@ export default function App() {
             <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
 
             <form className="compact-form admin-form" onSubmit={handleCreateUser}>
-              <input placeholder="Nome" value={userForm.name} onChange={(event) => setUserForm((current) => ({ ...current, name: event.target.value }))} />
-              <input placeholder="E-mail" value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} />
-              <input
-                placeholder="Documento (CPF)"
-                value={formatCPF(userForm.document)}
-                inputMode="numeric"
-                maxLength={14}
-                className={userFormDocumentError ? 'input-error' : ''}
-                onChange={(event) => {
-                  const formatted = formatCPF(event.target.value);
-                  const nextDigits = formatted.replace(/\D/g, '').slice(0, 11);
-                  setUserForm((current) => ({ ...current, document: nextDigits }));
-                  setUserFormDocumentError(validateCPFProgress(formatted));
-                }}
-              />
-              {userFormDocumentError ? <small className="error-message">{userFormDocumentError}</small> : null}
-              <input
-                type="password"
-                placeholder="Senha inicial"
-                value={userForm.password}
-                onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))}
-              />
-              <select value={userForm.role} onChange={(event) => setUserForm((current) => ({ ...current, role: event.target.value as UserRole }))}>
-                <option value={UserRole.SOLICITANTE}>Solicitante</option>
-                <option value={UserRole.EXTENSIONISTA}>Extensionista</option>
-                <option value={UserRole.ADMINISTRADOR}>Administrador</option>
-              </select>
+              <label className={userFormErrors.name ? 'invalid' : ''}>
+                <span className="field-label">Nome <span className="required-mark">*</span></span>
+                <input
+                  value={userForm.name}
+                  className={userFormErrors.name ? 'input-error' : ''}
+                  aria-invalid={Boolean(userFormErrors.name)}
+                  aria-describedby={userFormErrors.name ? 'user-name-error' : undefined}
+                  onChange={(event) => {
+                    setUserForm((current) => ({ ...current, name: event.target.value }));
+                    setUserFormErrors((current) => ({ ...current, name: undefined }));
+                  }}
+                />
+                {userFormErrors.name ? <small id="user-name-error" className="field-error">{userFormErrors.name}</small> : null}
+              </label>
+              <label className={userFormErrors.email ? 'invalid' : ''}>
+                <span className="field-label">E-mail <span className="required-mark">*</span></span>
+                <input
+                  value={userForm.email}
+                  className={userFormErrors.email ? 'input-error' : ''}
+                  aria-invalid={Boolean(userFormErrors.email)}
+                  aria-describedby={userFormErrors.email ? 'user-email-error' : undefined}
+                  onChange={(event) => {
+                    setUserForm((current) => ({ ...current, email: event.target.value }));
+                    setUserFormErrors((current) => ({ ...current, email: undefined }));
+                  }}
+                />
+                {userFormErrors.email ? <small id="user-email-error" className="field-error">{userFormErrors.email}</small> : null}
+              </label>
+              <label className={userFormErrors.document ? 'invalid' : ''}>
+                <span className="field-label">USUÁRIO <span className="required-mark">*</span></span>
+                <input
+                  value={formatCPF(userForm.document)}
+                  inputMode="numeric"
+                  maxLength={14}
+                  className={userFormErrors.document ? 'input-error' : ''}
+                  aria-invalid={Boolean(userFormErrors.document)}
+                  aria-describedby={userFormErrors.document ? 'user-document-error' : undefined}
+                  onChange={(event) => {
+                    const formatted = formatCPF(event.target.value);
+                    const nextDigits = formatted.replace(/\D/g, '').slice(0, 11);
+                    setUserForm((current) => ({ ...current, document: nextDigits }));
+                    setUserFormErrors((current) => ({ ...current, document: undefined }));
+                  }}
+                />
+                {userFormErrors.document ? <small id="user-document-error" className="field-error">{userFormErrors.document}</small> : null}
+              </label>
+              <label className={userFormErrors.password ? 'invalid' : ''}>
+                <span className="field-label">Senha inicial <span className="required-mark">*</span></span>
+                <input
+                  type="password"
+                  value={userForm.password}
+                  className={userFormErrors.password ? 'input-error' : ''}
+                  aria-invalid={Boolean(userFormErrors.password)}
+                  aria-describedby={userFormErrors.password ? 'user-password-error' : 'user-password-help'}
+                  onChange={(event) => {
+                    setUserForm((current) => ({ ...current, password: event.target.value }));
+                    setUserFormErrors((current) => ({ ...current, password: undefined }));
+                  }}
+                />
+                {userFormErrors.password ? (
+                  <small id="user-password-error" className="field-error">{userFormErrors.password}</small>
+                ) : (
+                  <small id="user-password-help">A senha deve ter no minimo 6 digitos</small>
+                )}
+              </label>
+              <label>
+                <span className="field-label">Perfil <span className="required-mark">*</span></span>
+                <select value={userForm.role} onChange={(event) => setUserForm((current) => ({ ...current, role: event.target.value as UserRole }))}>
+                  <option value={UserRole.SOLICITANTE}>Solicitante</option>
+                  <option value={UserRole.EXTENSIONISTA}>Extensionista</option>
+                  <option value={UserRole.ADMINISTRADOR}>Administrador</option>
+                </select>
+              </label>
               <button
                 type="submit"
-                disabled={
-                  !userForm.name ||
-                  !userForm.email ||
-                  !isValidCPF(userForm.document) ||
-                  userForm.password.length < 6
-                }
+                disabled={Object.keys(getUserFormErrors(userForm)).length > 0}
               >
                 Cadastrar
               </button>
@@ -4737,8 +4736,6 @@ export default function App() {
                 <h2>Perfis e locais</h2>
               </div>
             </div>
-
-            <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
 
             <div className="admin-user-filter">
               <div>
@@ -4754,6 +4751,7 @@ export default function App() {
                 onChange={(event) => {
                   setAdminUserRoleFilter(event.target.value as UserRole | '');
                   setSelectedAdminUserId('');
+                  setMunicipalitySearch('');
                 }}
               >
                 <option value="">Selecionar perfil</option>
@@ -4764,7 +4762,10 @@ export default function App() {
               {adminUserRoleFilter ? (
                 <select
                   value={selectedAdminUserId}
-                  onChange={(event) => setSelectedAdminUserId(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedAdminUserId(event.target.value);
+                    setMunicipalitySearch('');
+                  }}
                 >
                   <option value="">Selecionar pessoa</option>
                   {filteredAdminUsers.map((user) => (
@@ -4788,6 +4789,13 @@ export default function App() {
                     {(() => {
                       const linkedMunicipalities =
                         user.attendanceMunicipalities?.map((item) => item.municipality) ?? [];
+                      const linkedIds = linkedMunicipalities.map((item) => item.id);
+                      const searchTerm = municipalitySearch.trim().toLowerCase().replace('/mt', '');
+                      const filteredMunicipalities = data.serviceMunicipalities.filter((municipality) => {
+                        const label = `${municipality.name}/MT`.toLowerCase();
+
+                        return !searchTerm || label.replace('/mt', '').includes(searchTerm) || label.includes(searchTerm);
+                      });
 
                       return (
                         <>
@@ -4803,9 +4811,14 @@ export default function App() {
                       <div className="extensionist-location-control">
                         <div className="municipality-picker">
                           <span>Municipios de atendimento</span>
+                          <input
+                            className="municipality-search-input"
+                            placeholder="Buscar municipio"
+                            value={municipalitySearch}
+                            onChange={(event) => setMunicipalitySearch(event.target.value)}
+                          />
                           <div className="municipality-check-list">
-                            {data.serviceMunicipalities.map((municipality) => {
-                              const linkedIds = linkedMunicipalities.map((item) => item.id);
+                            {filteredMunicipalities.map((municipality) => {
                               const isChecked = linkedIds.includes(municipality.id);
 
                               return (
@@ -4825,6 +4838,9 @@ export default function App() {
                                 </label>
                               );
                             })}
+                            {filteredMunicipalities.length === 0 ? (
+                              <p className="empty municipality-empty">Nenhum municipio encontrado</p>
+                            ) : null}
                           </div>
                         </div>
                         <div className="municipality-chips">
@@ -4851,7 +4867,7 @@ export default function App() {
               ) : null}
               {data.serviceMunicipalities.length === 0 ? (
                 <p className="empty">
-                  Estrutura preparada. Cadastre municipios para vincular locais aos extensionistas.
+                  Nao foi possivel carregar municipios da API do SAGAe.
                 </p>
               ) : null}
             </div>
@@ -4913,8 +4929,6 @@ export default function App() {
               </div>
               <strong>{adminFilteredServices.length}</strong>
             </div>
-
-            <LocalMessagesContainer messages={localMessages.messages} onRemove={localMessages.removeMessage} />
 
             <div className="service-filter-panel">
               <label>
@@ -5000,3 +5014,6 @@ export default function App() {
     </main>
   );
 }
+
+
+

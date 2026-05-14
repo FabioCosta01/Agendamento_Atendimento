@@ -3,6 +3,7 @@ import { UserRole } from 'shared';
 
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { SagaeMunicipiosService } from '../sagae/sagae-municipios.service';
 import { hashPassword } from '../security/password';
 
 import { AtualizarUsuarioDto } from './dto/atualizar-usuario.dto';
@@ -11,10 +12,13 @@ import { CriarUsuarioDto } from './dto/criar-usuario.dto';
 
 @Injectable()
 export class UsuariosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sagaeMunicipiosService: SagaeMunicipiosService,
+  ) {}
 
   async findAll() {
-    return this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       orderBy: {
         createdAt: 'desc',
       },
@@ -27,19 +31,15 @@ export class UsuariosService {
         role: true,
         attendanceMunicipalities: {
           select: {
-            municipality: {
-              select: {
-                id: true,
-                name: true,
-                state: true,
-              },
-            },
+            municipalityId: true,
           },
         },
         isActive: true,
         createdAt: true,
       },
     });
+
+    return this.sagaeMunicipiosService.hydrateAttendanceMunicipalities(users);
   }
 
   async findRequesters() {
@@ -103,28 +103,23 @@ export class UsuariosService {
         role: true,
         attendanceMunicipalities: {
           select: {
-            municipality: {
-              select: {
-                id: true,
-                name: true,
-                state: true,
-              },
-            },
+            municipalityId: true,
           },
         },
         isActive: true,
         createdAt: true,
       },
     });
+    const hydratedUser = await this.sagaeMunicipiosService.hydrateAttendanceMunicipality(user);
 
     if (actor) {
-      await this.createAuditLog(actor.id, 'User', user.id, 'CREATE', {
-        role: user.role,
-        email: user.email,
+      await this.createAuditLog(actor.id, 'User', hydratedUser.id, 'CREATE', {
+        role: hydratedUser.role,
+        email: hydratedUser.email,
       });
     }
 
-    return user;
+    return hydratedUser;
   }
 
   async registerRequester(registerRequesterDto: CadastrarSolicitanteDto) {
@@ -234,28 +229,23 @@ export class UsuariosService {
         role: true,
         attendanceMunicipalities: {
           select: {
-            municipality: {
-              select: {
-                id: true,
-                name: true,
-                state: true,
-              },
-            },
+            municipalityId: true,
           },
         },
         isActive: true,
         createdAt: true,
       },
     });
+    const hydratedUser = await this.sagaeMunicipiosService.hydrateAttendanceMunicipality(updatedUser);
 
     if (actor) {
-      await this.createAuditLog(actor.id, 'User', updatedUser.id, 'UPDATE', {
-        role: updatedUser.role,
-        isActive: updatedUser.isActive,
+      await this.createAuditLog(actor.id, 'User', hydratedUser.id, 'UPDATE', {
+        role: hydratedUser.role,
+        isActive: hydratedUser.isActive,
       });
     }
 
-    return updatedUser;
+    return hydratedUser;
   }
 
   private normalizeUserPayload<T extends Partial<CriarUsuarioDto & AtualizarUsuarioDto>>(payload: T) {
@@ -272,8 +262,8 @@ export class UsuariosService {
 
     const password = payload.password?.trim();
     if (password !== undefined) {
-      if (password.length < 8) {
-        throw new BadRequestException('Senha deve ter pelo menos 8 caracteres');
+      if (password.length < 6) {
+        throw new BadRequestException('A senha deve ter no minimo 6 digitos');
       }
 
       if (document && password.replace(/\D/g, '') === document) {
@@ -303,19 +293,7 @@ export class UsuariosService {
       return [];
     }
 
-    const municipalities = await this.prisma.serviceMunicipality.findMany({
-      where: {
-        id: { in: uniqueIds },
-        active: true,
-      },
-      select: { id: true },
-    });
-
-    if (municipalities.length !== uniqueIds.length) {
-      throw new BadRequestException('Um ou mais municipios de atendimento nao foram encontrados ou estao inativos');
-    }
-
-    return uniqueIds;
+    return this.sagaeMunicipiosService.ensureMunicipalityIdsExist(uniqueIds);
   }
 
   private normalizeRequesterRegistration(payload: CadastrarSolicitanteDto) {
@@ -328,15 +306,15 @@ export class UsuariosService {
     const password = payload.password.trim();
 
     if (!this.isValidCpf(document)) {
-      throw new BadRequestException('CPF invalido');
+      throw new BadRequestException('Informe um CPF valido');
     }
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      throw new BadRequestException('E-mail invalido');
+      throw new BadRequestException('Informe um e-mail valido');
     }
 
-    if (password.length < 8) {
-      throw new BadRequestException('Senha deve ter pelo menos 8 caracteres');
+    if (password.length < 6) {
+      throw new BadRequestException('A senha deve ter no minimo 6 digitos');
     }
 
     if (password.replace(/\D/g, '') === document || password === '12345678') {

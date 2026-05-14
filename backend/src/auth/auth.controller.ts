@@ -1,8 +1,4 @@
-import { Body, Controller, Post, Req } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import type { Request } from 'express';
-
-import { getClientIp } from '../common/request-ip';
+import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
 
 import { AuthService } from './auth.service';
 import type { AuthenticatedUser } from './auth.types';
@@ -10,15 +6,11 @@ import { AllowPendingPasswordFlow } from './decorators/allow-pending-password.de
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { LoginDto } from './dto/login.dto';
-import { RecuperarSenhaDto } from './dto/recuperar-senha.dto';
 import { TrocarSenhaObrigatoriaDto } from './dto/trocar-senha-obrigatoria.dto';
 
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Public()
   @Post('login')
@@ -28,9 +20,8 @@ export class AuthController {
 
   @Public()
   @Post('recuperar-senha')
-  recuperarSenha(@Body() dto: RecuperarSenhaDto, @Req() req: Request) {
-    const trustProxy = this.configService.get<string>('TRUST_PROXY', 'false') === 'true';
-    return this.authService.recoverPassword(dto.document, dto.phone, getClientIp(req, trustProxy));
+  recuperarSenha() {
+    throw new BadRequestException('Funcionalidade em desenvolvimento');
   }
 
   @AllowPendingPasswordFlow()

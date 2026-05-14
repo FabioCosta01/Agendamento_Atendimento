@@ -6,7 +6,7 @@ export class CriarUsuarioDto {
   @IsNotEmpty()
   name!: string;
 
-  @IsEmail()
+  @IsEmail({}, { message: 'Informe um e-mail valido' })
   email!: string;
 
   @IsString()
@@ -14,7 +14,7 @@ export class CriarUsuarioDto {
   document!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(6, { message: 'A senha deve ter no minimo 6 digitos' })
   password!: string;
 
   @IsOptional()

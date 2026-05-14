@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, Logger, UnauthorizedExceptio
 import { Reflector } from '@nestjs/core';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { SagaeMunicipiosService } from '../../sagae/sagae-municipios.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { JwtService } from '../jwt.service';
 
@@ -13,6 +14,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly sagaeMunicipiosService: SagaeMunicipiosService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -58,22 +60,17 @@ export class JwtAuthGuard implements CanActivate {
           mustChangePassword: true,
           attendanceMunicipalities: {
             select: {
-              municipality: {
-                select: {
-                  id: true,
-                  name: true,
-                  state: true,
-                },
-              },
+              municipalityId: true,
             },
           },
         },
       });
 
       if (!activeUser) {
-        this.logger.warn(`Usuario inativo ou nao encontrado: ${tokenUser.id}`);
+        this.logger.warn('Usuario inativo ou nao encontrado');
         throw new UnauthorizedException('Usuario inativo ou nao encontrado');
       }
+      const hydratedUser = await this.sagaeMunicipiosService.hydrateAttendanceMunicipality(activeUser);
 
       // Attach user to request object (without sensitive data)
       request.user = {
@@ -83,7 +80,7 @@ export class JwtAuthGuard implements CanActivate {
         document: activeUser.document,
         role: activeUser.role,
         mustChangePassword: activeUser.mustChangePassword,
-        attendanceMunicipalities: activeUser.attendanceMunicipalities,
+        attendanceMunicipalities: hydratedUser.attendanceMunicipalities,
       };
 
       return true;

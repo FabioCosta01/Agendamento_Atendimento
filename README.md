@@ -43,7 +43,17 @@ Frontend (`frontend/.env`):
 VITE_API_URL=http://localhost:3001/api
 ```
 
-Em producao, usar `NODE_ENV=production`, `JWT_SECRET` forte, `FRONTEND_URL` com o dominio oficial e, se necessario, `VITE_API_URL=/api`.
+Em producao, use os modelos `backend/.env.production.example` e `frontend/.env.production.example`.
+Enquanto a VM/dominio final nao estiverem liberados, mantenha placeholders e substitua no deploy:
+
+- `DATABASE_URL`: conexao real do banco.
+- `FRONTEND_URL`: dominio final ou URL temporaria da VM.
+- `VITE_API_URL`: `/api` com Nginx no mesmo dominio, ou URL completa da API.
+- `JWT_SECRET`: segredo forte e exclusivo.
+- `SAGAE_MUNICIPIOS_URL`: endpoint configuravel da API de municipios do SAGAe.
+- `SAGAE_EXTENSIONISTAS_LOGIN_URL`: endpoint de login/validacao de extensionistas do SAGAe.
+- `SAGAE_API_TOKEN`: token/chave opcional do SAGAe, usado somente pelo backend.
+- `DOMINIO_FINAL`, `IP_DA_VM`, `BACKEND_HOST`: placeholders do Nginx.
 
 O script `backend/scripts/validate-jwt.js` roda antes do Nest em `dev`/`start`: `JWT_SECRET` precisa ter **pelo menos 32 caracteres** e nao pode ser o valor proibido antigo (`trocar-por-um-segredo-seguro`).
 
@@ -139,8 +149,8 @@ No Windows, `scripts/deploy.ps1` assume a raiz do repo como pasta pai de `script
 - Use `scripts/deploy.ps1` para um fluxo de build + migrations + validação de healthcheck no Windows.
 - Valide o backend com `curl -I https://seu-dominio/api/health` ou `Invoke-WebRequest` no Windows.
 - Servir `frontend/dist` via Nginx.
-- Fazer proxy de `/api/` para `http://127.0.0.1:3001/api/`.
-- Configurar `FRONTEND_URL`, `DATABASE_URL` e `JWT_SECRET` seguro no ambiente de producao.
+- Fazer proxy de `/api/` para `http://BACKEND_HOST:3001/api/`.
+- Configurar `FRONTEND_URL`, `DATABASE_URL`, `SAGAE_MUNICIPIOS_URL`, `SAGAE_EXTENSIONISTAS_LOGIN_URL` e `JWT_SECRET` seguro no ambiente de producao.
 
 O arquivo base de Nginx esta em `scripts/nginx/agendamento-atendimento.conf`.
 

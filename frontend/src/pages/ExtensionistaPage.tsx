@@ -53,7 +53,7 @@ export function ExtensionistaPage({
       setFeedback(`Agendamento ${result.protocolCode} aprovado com sucesso.`);
     } catch (approveError) {
       setFeedback('Nao foi possivel aprovar o agendamento.');
-      console.error(approveError);
+      if (import.meta.env.DEV) { console.error(approveError); }
     }
   }
 
@@ -81,7 +81,7 @@ export function ExtensionistaPage({
       });
     } catch (availabilityError) {
       setFeedback('Nao foi possivel cadastrar a disponibilidade.');
-      console.error(availabilityError);
+      if (import.meta.env.DEV) { console.error(availabilityError); }
     }
   }
 

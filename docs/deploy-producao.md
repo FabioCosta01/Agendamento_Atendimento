@@ -1,6 +1,6 @@
 # Deploy de producao
 
-Checklist objetivo para publicar o Agendamento Atendimento sem depender das rotas do SAGAe.
+Checklist objetivo para deixar o Agendamento Atendimento pronto para producao mesmo antes da VM e do dominio definitivo.
 
 ## Requisitos
 
@@ -12,15 +12,18 @@ Checklist objetivo para publicar o Agendamento Atendimento sem depender das rota
 
 ## Variaveis
 
-Backend:
+Backend (`backend/.env.production.example`):
 
 ```env
 NODE_ENV=production
-DATABASE_URL=mysql://USUARIO:SENHA@HOST:3306/agendamento_atendimento
+DATABASE_URL=mysql://USUARIO_BANCO:SENHA_BANCO@HOST_BANCO:3306/agendamento_atendimento
 PORT=3001
-FRONTEND_URL=https://seu-dominio
+FRONTEND_URL=https://DOMINIO_FINAL
 TRUST_PROXY=true
-JWT_SECRET=segredo-forte-com-mais-de-32-caracteres
+SAGAE_MUNICIPIOS_URL=http://teste.sagae.empaer.mt.gov.br:8080/api/municipios
+SAGAE_EXTENSIONISTAS_LOGIN_URL=http://teste.sagae.empaer.mt.gov.br:8080/api/login
+SAGAE_API_TOKEN=
+JWT_SECRET=TROCAR_POR_SEGREDO_FORTE_COM_MAIUSCULAS_minusculas_123_E_SIMBOLOS!
 JWT_EXPIRES_IN=8h
 JWT_ISSUER=agendamento-atendimento
 JWT_AUDIENCE=agendamento-atendimento-client
@@ -28,11 +31,24 @@ JWT_AUDIENCE=agendamento-atendimento-client
 
 Use `TRUST_PROXY=true` somente se o backend nao ficar acessivel diretamente e receber trafego apenas do proxy reverso.
 
-Frontend:
+Frontend (`frontend/.env.production.example`):
 
 ```env
 VITE_API_URL=/api
 ```
+
+Antes do dominio definitivo, substitua `DOMINIO_FINAL` pelo IP/nome temporario da VM no `FRONTEND_URL` e no `server_name` do Nginx. Quando o dominio for liberado, volte esses valores para a URL final com HTTPS.
+
+Valores que precisam ser preenchidos no deploy:
+
+- `DATABASE_URL`: usuario, senha, host e porta reais do MySQL/MariaDB.
+- `FRONTEND_URL`: origem publica exata do frontend, sem barra final. Aceita multiplas origens separadas por virgula durante transicao.
+- `JWT_SECRET`: segredo forte, unico por ambiente, com letras maiusculas, minusculas, numeros e simbolos.
+- `SAGAE_MUNICIPIOS_URL`: URL da API de municipios do SAGAe.
+- `SAGAE_EXTENSIONISTAS_LOGIN_URL`: URL de autenticacao/validacao de extensionistas do SAGAe.
+- `SAGAE_API_TOKEN`: token/chave opcional do SAGAe, nunca exposto no frontend.
+- `VITE_API_URL`: `/api` quando frontend e backend estao no mesmo dominio/proxy; URL completa se a API estiver em outro host.
+- `DOMINIO_FINAL`, `IP_DA_VM`, `BACKEND_HOST`: placeholders do Nginx.
 
 ## Validacao antes de publicar
 
@@ -81,12 +97,20 @@ pm2 save
 
 ## Nginx
 
-Use `scripts/nginx/agendamento-atendimento.conf` como base:
+Use `scripts/nginx/agendamento-atendimento.conf` como base.
 
 - `/` serve `frontend/dist`.
-- `/api/` faz proxy para `http://127.0.0.1:3001/api/`.
-- HTTPS obrigatorio.
-- HTTP deve redirecionar para HTTPS.
+- `/api/` faz proxy para `http://BACKEND_HOST:3001/api/`.
+- Antes do dominio, use `server_name IP_DA_VM _;`.
+- Depois do dominio, substitua `DOMINIO_FINAL`, emita SSL e ative o bloco HTTPS comentado no arquivo.
+
+Para emitir HTTPS quando o dominio apontar para a VM:
+
+```bash
+sudo certbot --nginx -d DOMINIO_FINAL
+sudo nginx -t
+sudo systemctl reload nginx
+```
 
 ## Backup
 
@@ -103,7 +127,7 @@ Guarde os arquivos da pasta `backups/` fora do servidor de aplicacao ou em armaz
 Validar:
 
 ```powershell
-Invoke-WebRequest https://seu-dominio/api/health
+Invoke-WebRequest https://DOMINIO_FINAL/api/health
 ```
 
 O retorno esperado deve ter:
@@ -114,5 +138,6 @@ O retorno esperado deve ter:
 
 ## Pendencias conhecidas
 
-- Integracao SAGAe para municipios e extensionistas.
 - Canal oficial para entrega segura de senha provisoria na recuperacao de senha.
+
+

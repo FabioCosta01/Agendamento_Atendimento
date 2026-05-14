@@ -7,6 +7,8 @@ build/
 
 # Logs
 *.log
+logs/*
+!logs/.gitkeep
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

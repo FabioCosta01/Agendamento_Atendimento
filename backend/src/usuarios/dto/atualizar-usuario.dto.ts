@@ -7,7 +7,7 @@ export class AtualizarUsuarioDto {
   name?: string;
 
   @IsOptional()
-  @IsEmail()
+  @IsEmail({}, { message: 'Informe um e-mail valido' })
   email?: string;
 
   @IsOptional()
@@ -16,7 +16,7 @@ export class AtualizarUsuarioDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(8)
+  @MinLength(6, { message: 'A senha deve ter no minimo 6 digitos' })
   password?: string;
 
   @IsOptional()

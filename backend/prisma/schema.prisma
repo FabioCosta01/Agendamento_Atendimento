@@ -41,6 +41,7 @@ model User {
   name             String             @map("nome")
   email            String             @unique(map: "usuario_email_key")
   document         String             @unique(map: "usuario_documento_key") @map("documento")
+  sagaeId          String?            @unique(map: "usuario_sagae_id_key") @map("sagae_id")
   passwordHash     String             @map("senha_hash")
   phone            String?            @map("telefone")
   mustChangePassword Boolean          @default(false) @map("deve_trocar_senha")
@@ -59,28 +60,12 @@ model User {
   @@map("usuario")
 }
 
-model ServiceMunicipality {
-  id               String             @id @default(cuid())
-  name             String             @map("nome")
-  state            String             @default("MT") @map("uf")
-  active           Boolean            @default(true) @map("ativo")
-  createdAt        DateTime           @default(now()) @map("criado_em")
-  updatedAt        DateTime           @updatedAt @map("atualizado_em")
-  extensionists    ExtensionistMunicipality[]
-  availabilities   Availability[]
-
-  @@unique([name, state], map: "municipio_atendimento_nome_uf_key")
-  @@index([active], map: "municipio_atendimento_ativo_idx")
-  @@map("municipio_atendimento")
-}
-
 model ExtensionistMunicipality {
   id             String              @id @default(cuid())
   extensionistId String              @map("extensionista_id")
   municipalityId String              @map("municipio_id")
   createdAt      DateTime            @default(now()) @map("criado_em")
   extensionist   User                @relation(fields: [extensionistId], references: [id])
-  municipality   ServiceMunicipality @relation(fields: [municipalityId], references: [id])
 
   @@unique([extensionistId, municipalityId], map: "extensionista_municipio_unique")
   @@index([municipalityId], map: "extensionista_municipio_municipio_id_idx")
@@ -137,7 +122,6 @@ model Availability {
   createdAt             DateTime      @default(now()) @map("criado_em")
   updatedAt             DateTime      @updatedAt @map("atualizado_em")
   extensionist          User          @relation("AvailabilityOwner", fields: [extensionistId], references: [id])
-  municipality          ServiceMunicipality @relation(fields: [municipalityId], references: [id])
   appointments          Appointment[]
 
   @@unique([extensionistId, startDateTime], map: "disponibilidade_extensionista_inicio_key")

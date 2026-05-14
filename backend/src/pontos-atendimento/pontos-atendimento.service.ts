@@ -1,25 +1,12 @@
 import { Injectable } from '@nestjs/common';
 
-import { PrismaService } from '../prisma/prisma.service';
+import { SagaeMunicipiosService } from '../sagae/sagae-municipios.service';
 
 @Injectable()
 export class PontosAtendimentoService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly sagaeMunicipiosService: SagaeMunicipiosService) {}
 
   async findAll() {
-    return this.prisma.serviceMunicipality.findMany({
-      where: {
-        active: true,
-      },
-      orderBy: {
-        name: 'asc',
-      },
-      select: {
-        id: true,
-        name: true,
-        state: true,
-        active: true,
-      },
-    });
+    return this.sagaeMunicipiosService.findAll();
   }
 }

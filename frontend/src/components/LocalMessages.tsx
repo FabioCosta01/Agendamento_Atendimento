@@ -28,7 +28,7 @@ export function useLocalMessages() {
       duration,
     };
 
-    setMessages((prev) => [...prev, newMessage]);
+    setMessages([newMessage]);
 
     if (autoHide) {
       setTimeout(() => {

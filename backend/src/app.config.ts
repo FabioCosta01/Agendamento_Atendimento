@@ -43,6 +43,14 @@ export function validateEnvironment(config: Env) {
       throw new Error('JWT_AUDIENCE precisa ser definido em producao');
     }
 
+    if (!config.SAGAE_MUNICIPIOS_URL) {
+      throw new Error('SAGAE_MUNICIPIOS_URL precisa ser definido em producao');
+    }
+
+    if (!config.SAGAE_EXTENSIONISTAS_LOGIN_URL) {
+      throw new Error('SAGAE_EXTENSIONISTAS_LOGIN_URL precisa ser definido em producao');
+    }
+
     // Ensure JWT_SECRET contains a mix of character types for better security
     const hasUpperCase = /[A-Z]/.test(jwtSecret);
     const hasLowerCase = /[a-z]/.test(jwtSecret);
@@ -58,9 +66,15 @@ export function validateEnvironment(config: Env) {
     ...config,
     NODE_ENV: nodeEnv,
     PORT: config.PORT ?? '3001',
-    FRONTEND_URL: config.FRONTEND_URL ?? 'http://localhost:5173',
+    FRONTEND_URL: config.FRONTEND_URL,
     JWT_EXPIRES_IN: jwtExpiresIn,
     JWT_ISSUER: jwtIssuer,
     JWT_AUDIENCE: jwtAudience,
+    SAGAE_MUNICIPIOS_URL: config.SAGAE_MUNICIPIOS_URL ?? 'http://teste.sagae.empaer.mt.gov.br:8080/api/municipios',
+    SAGAE_EXTENSIONISTAS_LOGIN_URL:
+      config.SAGAE_EXTENSIONISTAS_LOGIN_URL ?? 'http://teste.sagae.empaer.mt.gov.br:8080/api/login',
+    SAGAE_API_TOKEN: config.SAGAE_API_TOKEN,
   };
 }
+
+

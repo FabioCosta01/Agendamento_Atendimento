@@ -141,7 +141,10 @@ export class PropriedadesService {
       if (state.length !== 2) {
         throw new BadRequestException('UF deve ter 2 letras');
       }
-      data.state = state;
+      if (state !== 'MT') {
+        throw new BadRequestException('Somente municipios de Mato Grosso podem ser cadastrados');
+      }
+      data.state = 'MT';
     }
 
     if (payload.address !== undefined) {
@@ -172,6 +175,10 @@ export class PropriedadesService {
 
     if (state.length !== 2) {
       throw new BadRequestException('UF deve ter 2 letras');
+    }
+
+    if (state !== 'MT') {
+      throw new BadRequestException('Somente municipios de Mato Grosso podem ser cadastrados');
     }
 
     if (ownerDocument.length < 11) {

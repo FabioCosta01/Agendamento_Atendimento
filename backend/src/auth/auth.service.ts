@@ -1,14 +1,22 @@
+import { randomBytes } from 'node:crypto';
+
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UserRole } from 'shared';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { SagaeExtensionist, SagaeExtensionistasService } from '../sagae/sagae-extensionistas.service';
+import { SagaeMunicipiosService } from '../sagae/sagae-municipios.service';
 import { hashPassword, verifyPassword } from '../security/password';
 import { generateProvisionalPassword } from '../security/provisional-password';
 
@@ -24,72 +32,58 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly sagaeMunicipiosService: SagaeMunicipiosService,
+    private readonly sagaeExtensionistasService: SagaeExtensionistasService,
   ) {}
 
   async login(loginDto: LoginDto) {
-    this.ensureLoginAllowed(loginDto.document);
+    const identifier = loginDto.document.trim();
+    this.ensureLoginAllowed(identifier);
 
+    const documentDigits = identifier.replace(/\D/g, '');
     const user = await this.prisma.user.findFirst({
       where: {
-        OR: [{ document: loginDto.document }, { email: loginDto.document }],
+        OR: [{ document: documentDigits || identifier }, { email: identifier.toLowerCase() }],
         isActive: true,
       },
       include: {
         attendanceMunicipalities: {
           select: {
-            municipality: {
-              select: {
-                id: true,
-                name: true,
-                state: true,
-              },
-            },
+            municipalityId: true,
           },
         },
       },
     });
+    const hasValidLocalPassword = user ? verifyPassword(loginDto.password, user.passwordHash) : false;
 
-    if (!user || !verifyPassword(loginDto.password, user.passwordHash)) {
-      this.registerFailedLogin(loginDto.document);
+    if (user && hasValidLocalPassword) {
+      this.clearFailedLogin(identifier);
+
+      return this.buildLoginResponse(user, 'local');
+    }
+
+    if (this.isValidCpf(documentDigits)) {
+      const sagaeLogin = await this.trySagaeExtensionistLogin(documentDigits, loginDto.password);
+
+      if (sagaeLogin) {
+        this.clearFailedLogin(identifier);
+        return sagaeLogin;
+      }
+
+      if (user?.role === UserRole.EXTENSIONISTA) {
+        this.registerFailedLogin(identifier);
+        throw new UnauthorizedException('Documento ou senha invalidos');
+      }
+    }
+
+    if (!hasValidLocalPassword) {
+      this.registerFailedLogin(identifier);
       throw new UnauthorizedException('Documento ou senha invalidos');
     }
 
-    this.clearFailedLogin(loginDto.document);
+    this.clearFailedLogin(identifier);
 
-    await this.prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        entity: 'User',
-        entityId: user.id,
-        action: 'LOGIN',
-        payload: {
-          at: new Date().toISOString(),
-        },
-      },
-    });
-
-    return {
-      message: 'Login realizado com sucesso',
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        document: user.document,
-        role: user.role,
-        mustChangePassword: user.mustChangePassword,
-        attendanceMunicipalities: user.attendanceMunicipalities,
-      },
-      token: this.jwtService.signToken({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        document: user.document,
-        role: user.role as UserRole,
-        mustChangePassword: user.mustChangePassword,
-      }),
-      tokenType: 'Bearer',
-      requiresTwoFactor: false,
-    };
+    return this.buildLoginResponse(user!, 'local');
   }
 
   private readonly genericRecoveryMessage =
@@ -164,8 +158,8 @@ export class AuthService {
     }
 
     const trimmed = newPassword.trim();
-    if (trimmed.length < 8) {
-      throw new BadRequestException('A nova senha deve ter pelo menos 8 caracteres.');
+    if (trimmed.length < 6) {
+      throw new BadRequestException('A nova senha deve ter no minimo 6 digitos.');
     }
     if (trimmed.replace(/\D/g, '') === user.document || trimmed === '12345678') {
       throw new BadRequestException('Use uma senha diferente do CPF e de senhas muito comuns.');
@@ -247,5 +241,162 @@ export class AuthService {
 
   private normalizeIdentifier(identifier: string) {
     return identifier.trim().toLowerCase();
+  }
+
+  private async trySagaeExtensionistLogin(document: string, password: string) {
+    try {
+      const extensionist = await this.sagaeExtensionistasService.authenticate(document, password);
+      const user = await this.upsertSagaeExtensionist(extensionist);
+
+      return this.buildLoginResponse(user, 'sagae');
+    } catch (error) {
+      if (
+        error instanceof ServiceUnavailableException ||
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException
+      ) {
+        throw error;
+      }
+
+      if (error instanceof UnauthorizedException) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  private async upsertSagaeExtensionist(extensionist: SagaeExtensionist) {
+    const municipalityIds = await this.sagaeMunicipiosService.ensureMunicipalityIdsExist(extensionist.municipalityIds);
+    const existingBySagaeId = extensionist.sagaeId
+      ? await this.prisma.user.findFirst({
+          where: { sagaeId: extensionist.sagaeId },
+          select: { id: true, document: true },
+        })
+      : null;
+    const existingByDocument = await this.prisma.user.findUnique({
+      where: { document: extensionist.document },
+      select: { id: true, sagaeId: true },
+    });
+
+    if (existingBySagaeId && existingByDocument && existingBySagaeId.id !== existingByDocument.id) {
+      throw new ConflictException('Cadastro local inconsistente para este extensionista');
+    }
+
+    const existingUserId = existingBySagaeId?.id ?? existingByDocument?.id;
+    const email = extensionist.email ?? `${extensionist.document}@sagae.local`;
+
+    return this.prisma.user.upsert({
+      where: { id: existingUserId ?? '__novo_extensionista_sagae__' },
+      create: {
+        sagaeId: extensionist.sagaeId,
+        name: extensionist.name,
+        email,
+        document: extensionist.document,
+        passwordHash: hashPassword(randomBytes(32).toString('base64url')),
+        phone: extensionist.phone,
+        role: UserRole.EXTENSIONISTA,
+        isActive: true,
+        mustChangePassword: false,
+        attendanceMunicipalities: {
+          create: municipalityIds.map((municipalityId) => ({ municipalityId })),
+        },
+      },
+      update: {
+        sagaeId: extensionist.sagaeId ?? undefined,
+        name: extensionist.name,
+        email,
+        phone: extensionist.phone,
+        role: UserRole.EXTENSIONISTA,
+        isActive: true,
+        mustChangePassword: false,
+        attendanceMunicipalities: {
+          deleteMany: {},
+          create: municipalityIds.map((municipalityId) => ({ municipalityId })),
+        },
+      },
+      include: {
+        attendanceMunicipalities: {
+          select: {
+            municipalityId: true,
+          },
+        },
+      },
+    });
+  }
+
+  private async buildLoginResponse(
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      document: string;
+      role: UserRole | string;
+      mustChangePassword: boolean;
+      attendanceMunicipalities?: Array<{ municipalityId: string }>;
+    },
+    source: 'local' | 'sagae',
+  ) {
+    const hydratedUser = await this.sagaeMunicipiosService.hydrateAttendanceMunicipality(user);
+
+    await this.prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        entity: 'User',
+        entityId: user.id,
+        action: 'LOGIN',
+        payload: {
+          source,
+          at: new Date().toISOString(),
+        },
+      },
+    });
+
+    return {
+      message: 'Login realizado com sucesso',
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        document: user.document,
+        role: user.role,
+        mustChangePassword: user.mustChangePassword,
+        attendanceMunicipalities: hydratedUser.attendanceMunicipalities,
+      },
+      token: this.jwtService.signToken({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        document: user.document,
+        role: user.role as UserRole,
+        mustChangePassword: user.mustChangePassword,
+      }),
+      tokenType: 'Bearer',
+      requiresTwoFactor: false,
+    };
+  }
+
+  private isValidCpf(document: string) {
+    if (!/^\d{11}$/.test(document) || /^(\d)\1{10}$/.test(document)) {
+      return false;
+    }
+
+    const digits = document.split('').map(Number);
+    const firstCheck = this.calculateCpfCheckDigit(digits.slice(0, 9), 10);
+    const secondCheck = this.calculateCpfCheckDigit([...digits.slice(0, 9), firstCheck], 11);
+
+    return digits[9] === firstCheck && digits[10] === secondCheck;
+  }
+
+  private calculateCpfCheckDigit(numbers: number[], weight: number) {
+    const sum = numbers.reduce((total, number) => {
+      const nextTotal = total + number * weight;
+      weight -= 1;
+
+      return nextTotal;
+    }, 0);
+    const remainder = (sum * 10) % 11;
+
+    return remainder === 10 ? 0 : remainder;
   }
 }

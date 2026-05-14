@@ -3,6 +3,7 @@ import { UserRole } from 'shared';
 
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
+import { SagaeMunicipiosService } from '../sagae/sagae-municipios.service';
 
 import { AtualizarDisponibilidadeAgendaDto } from './dto/atualizar-disponibilidade-agenda.dto';
 import { CriarDisponibilidadeAgendaDto } from './dto/criar-disponibilidade-agenda.dto';
@@ -10,7 +11,10 @@ import { CriarDisponibilidadeSemanalDto } from './dto/criar-disponibilidade-sema
 
 @Injectable()
 export class DisponibilidadeAgendaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sagaeMunicipiosService: SagaeMunicipiosService,
+  ) {}
 
   async findAll(user: AuthenticatedUser) {
     const availability = await this.prisma.availability.findMany({
@@ -20,11 +24,6 @@ export class DisponibilidadeAgendaService {
           : user.role === UserRole.SOLICITANTE
             ? {
                 startDateTime: { gt: new Date() },
-                municipality: {
-                  is: {
-                    active: true,
-                  },
-                },
               }
             : undefined,
       include: {
@@ -33,13 +32,6 @@ export class DisponibilidadeAgendaService {
             id: true,
             name: true,
             email: true,
-          },
-        },
-        municipality: {
-          select: {
-            id: true,
-            name: true,
-            state: true,
           },
         },
         _count: {
@@ -62,10 +54,10 @@ export class DisponibilidadeAgendaService {
     });
 
     if (user.role !== UserRole.SOLICITANTE) {
-      return availability;
+      return this.sagaeMunicipiosService.attachMunicipalitiesToAvailabilities(availability);
     }
 
-    return availability
+    const availableSlots = availability
       .filter((slot) => {
         const usedCapacity = slot.appointments.filter((appointment) =>
           ['SOLICITADO', 'APROVADO', 'REAGENDADO', 'CONCLUIDO'].includes(appointment.status),
@@ -79,6 +71,8 @@ export class DisponibilidadeAgendaService {
 
         return availableSlot;
       });
+
+    return this.sagaeMunicipiosService.attachMunicipalitiesToAvailabilities(availableSlots);
   }
 
   async create(createAvailabilityDto: CriarDisponibilidadeAgendaDto, user: AuthenticatedUser) {
@@ -132,13 +126,6 @@ export class DisponibilidadeAgendaService {
             email: true,
           },
         },
-        municipality: {
-          select: {
-            id: true,
-            name: true,
-            state: true,
-          },
-        },
         _count: {
           select: {
             appointments: true,
@@ -152,7 +139,7 @@ export class DisponibilidadeAgendaService {
       endDateTime: availability.endDateTime.toISOString(),
     });
 
-    return availability;
+    return this.sagaeMunicipiosService.attachMunicipalityToAvailability(availability);
   }
 
   async createWeekly(createWeeklyAvailabilityDto: CriarDisponibilidadeSemanalDto, user: AuthenticatedUser) {
@@ -231,7 +218,7 @@ export class DisponibilidadeAgendaService {
       weekStartDate: createWeeklyAvailabilityDto.weekStartDate,
     });
 
-    return this.prisma.availability.findMany({
+    const createdAvailability = await this.prisma.availability.findMany({
       where: {
         extensionistId: createWeeklyAvailabilityDto.extensionistId,
         startDateTime: {
@@ -246,13 +233,6 @@ export class DisponibilidadeAgendaService {
             email: true,
           },
         },
-        municipality: {
-          select: {
-            id: true,
-            name: true,
-            state: true,
-          },
-        },
         _count: {
           select: {
             appointments: true,
@@ -263,6 +243,8 @@ export class DisponibilidadeAgendaService {
         startDateTime: 'asc',
       },
     });
+
+    return this.sagaeMunicipiosService.attachMunicipalitiesToAvailabilities(createdAvailability);
   }
 
   private buildAvailabilityDataFromTimeBlock(
@@ -354,13 +336,6 @@ export class DisponibilidadeAgendaService {
             email: true,
           },
         },
-        municipality: {
-          select: {
-            id: true,
-            name: true,
-            state: true,
-          },
-        },
         _count: {
           select: {
             appointments: true,
@@ -374,7 +349,7 @@ export class DisponibilidadeAgendaService {
       endDateTime: updatedAvailability.endDateTime.toISOString(),
     });
 
-    return updatedAvailability;
+    return this.sagaeMunicipiosService.attachMunicipalityToAvailability(updatedAvailability);
   }
 
   async remove(id: string, user: AuthenticatedUser) {
